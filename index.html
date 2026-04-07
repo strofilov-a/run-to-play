@@ -334,6 +334,23 @@
         gap: 0.75rem;
       }
 
+      .ledger-day {
+        margin-top: 1rem;
+      }
+
+      .ledger-day:first-of-type {
+        margin-top: 0;
+      }
+
+      .ledger-day-title {
+        margin: 0 0 0.75rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
       .ledger-item {
         display: grid;
         gap: 0.35rem;
@@ -625,6 +642,7 @@
         durationMinutes: null
       };
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
+      const LEDGER_STORAGE_KEY = "run-to-play-ledger";
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -715,6 +733,48 @@
         }
       }
 
+      function saveLedger() {
+        localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+      }
+
+      function loadLedger() {
+        try {
+          const raw = localStorage.getItem(LEDGER_STORAGE_KEY);
+
+          if (!raw) {
+            return;
+          }
+
+          const parsed = JSON.parse(raw);
+
+          if (!Array.isArray(parsed)) {
+            return;
+          }
+
+          ledger = parsed;
+        } catch (error) {
+          ledger = [];
+        }
+      }
+
+      function computeBalanceFromLedger() {
+        return ledger.reduce(function (sum, entry) {
+          return sum + (entry.type === "plus" ? entry.minutes : -entry.minutes);
+        }, 0);
+      }
+
+      function getEntryDayLabel(entry) {
+        if (entry.createdAt) {
+          return new Date(entry.createdAt).toLocaleDateString("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          });
+        }
+
+        return "Без даты";
+      }
+
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
@@ -752,6 +812,7 @@
       }
 
       function renderLedger() {
+        balance = Math.max(0, computeBalanceFromLedger());
         balanceMinutes.textContent = formatMinutes(balance);
         ledgerList.innerHTML = "";
 
@@ -762,43 +823,69 @@
 
         emptyState.hidden = true;
 
-        ledger.forEach(function (entry) {
-          const item = document.createElement("li");
-          item.className = "ledger-item";
+        const grouped = ledger.reduce(function (accumulator, entry) {
+          const day = getEntryDayLabel(entry);
 
-          const top = document.createElement("div");
-          top.className = "ledger-top";
+          if (!accumulator[day]) {
+            accumulator[day] = [];
+          }
 
-          const title = document.createElement("span");
-          title.className = "ledger-title";
-          title.textContent = entry.title;
+          accumulator[day].push(entry);
+          return accumulator;
+        }, {});
 
-          const value = document.createElement("span");
-          value.className = `ledger-value ${entry.type}`;
-          value.textContent = `${entry.type === "plus" ? "+" : "-"}${formatMinutes(entry.minutes)}`;
+        Object.entries(grouped).forEach(function ([day, entries]) {
+          const dayBlock = document.createElement("li");
+          dayBlock.className = "ledger-day";
 
-          const meta = document.createElement("div");
-          meta.className = "ledger-meta";
-          meta.textContent = entry.meta;
+          const dayTitle = document.createElement("div");
+          dayTitle.className = "ledger-day-title";
+          dayTitle.textContent = day;
 
-          const time = document.createElement("div");
-          time.className = "ledger-time";
-          time.textContent = entry.timestamp;
+          const dayList = document.createElement("div");
+          dayList.className = "ledger-list";
 
-          top.append(title, value);
-          item.append(top, meta, time);
-          ledgerList.append(item);
+          entries.forEach(function (entry) {
+            const item = document.createElement("div");
+            item.className = "ledger-item";
+
+            const top = document.createElement("div");
+            top.className = "ledger-top";
+
+            const title = document.createElement("span");
+            title.className = "ledger-title";
+            title.textContent = entry.title;
+
+            const value = document.createElement("span");
+            value.className = `ledger-value ${entry.type}`;
+            value.textContent = `${entry.type === "plus" ? "+" : "-"}${formatMinutes(entry.minutes)}`;
+
+            const meta = document.createElement("div");
+            meta.className = "ledger-meta";
+            meta.textContent = entry.meta;
+
+            const time = document.createElement("div");
+            time.className = "ledger-time";
+            time.textContent = entry.timestamp;
+
+            top.append(title, value);
+            item.append(top, meta, time);
+            dayList.append(item);
+          });
+
+          dayBlock.append(dayTitle, dayList);
+          ledgerList.append(dayBlock);
         });
       }
 
       function addLedgerEntry(entry) {
         ledger.unshift(entry);
+        saveLedger();
         renderLedger();
       }
 
       function addCurrentSessionToLog() {
         const session = calculateSession();
-        balance += session.totalRounded;
 
         addLedgerEntry({
           type: "plus",
@@ -807,7 +894,8 @@
           meta:
             `${session.duration} min at ${session.heartRate} bpm` +
             `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
-          timestamp: `Added ${getTimestampLabel()}`
+          timestamp: `Added ${getTimestampLabel()}`,
+          createdAt: new Date().toISOString()
         });
       }
 
@@ -896,20 +984,20 @@
         }
 
         const spent = Math.min(balance, Math.round(subtractMinutes));
-        balance -= spent;
 
         addLedgerEntry({
           type: "minus",
           title: "Gameplay used",
           minutes: spent,
           meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
-          timestamp: `Subtracted ${getTimestampLabel()}`
+          timestamp: `Subtracted ${getTimestampLabel()}`,
+          createdAt: new Date().toISOString()
         });
       });
 
       clearLogButton.addEventListener("click", function () {
         ledger = [];
-        balance = 0;
+        saveLedger();
         renderLedger();
       });
 
@@ -945,6 +1033,7 @@
       fetchLinkButton.addEventListener("click", fetchActivityFromLink);
 
       loadCoefficients();
+      loadLedger();
       setControlCenterState(false);
       updateDetectedDisplay();
       updatePreview();
