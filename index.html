@@ -277,6 +277,21 @@
         font-size: 0.92rem;
       }
 
+      .ledger-time {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        margin-top: 0.35rem;
+        padding: 0.28rem 0.62rem;
+        border-radius: 999px;
+        background: rgba(239, 107, 31, 0.1);
+        border: 1px solid rgba(239, 107, 31, 0.14);
+        color: #9f4715;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
       .empty {
         margin: 1rem 0 0;
         padding: 1rem;
@@ -532,8 +547,12 @@
           meta.className = "ledger-meta";
           meta.textContent = entry.meta;
 
+          const time = document.createElement("div");
+          time.className = "ledger-time";
+          time.textContent = entry.timestamp;
+
           top.append(title, amount);
-          item.append(top, meta);
+          item.append(top, meta, time);
           ledgerList.append(item);
         });
       }
@@ -541,6 +560,15 @@
       function addLedgerEntry(entry) {
         ledger.unshift(entry);
         renderLedger();
+      }
+
+      function getTimestampLabel() {
+        return new Date().toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit"
+        });
       }
 
       form.addEventListener("submit", function (event) {
@@ -563,7 +591,8 @@
           minutes: session.totalRounded,
           meta:
             `${session.duration} min at ${session.heartRate} bpm` +
-            `${session.bonus ? ` + ${session.bonus} bonus` : ""}`
+            `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
+          timestamp: `Added ${getTimestampLabel()}`
         });
       });
 
@@ -581,7 +610,8 @@
           type: "minus",
           title: "Gameplay used",
           minutes: spent,
-          meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero"
+          meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
+          timestamp: `Subtracted ${getTimestampLabel()}`
         });
       });
 
@@ -594,8 +624,8 @@
       resetButton.addEventListener("click", function () {
         form.reset();
         activityField.value = "Running";
-        heartRateField.value = "145";
-        durationField.value = "30";
+        heartRateField.value = "0";
+        durationField.value = "0";
         bonusField.value = "0";
         subtractMinutesField.value = "15m";
         updatePreview();
