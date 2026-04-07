@@ -305,9 +305,10 @@
         <span class="eyebrow">Run To Play</span>
         <h1>Turn exercise into game minutes.</h1>
         <p>
-          Track running, cycling, and gym sessions. This version uses a fixed
-          coefficient of <strong>170</strong>, keeps bonus minutes, and lets you
-          build a simple balance you can add to or subtract from over time.
+          Track running, cycling, and gym sessions. Running uses a coefficient of
+          <strong>170</strong>, cycling uses <strong>350</strong>, and gym uses
+          <strong>250</strong>. Earned time stacks in a balance, and you can spend
+          it with entries like <strong>1h20m</strong>.
         </p>
       </section>
 
@@ -343,8 +344,8 @@
               </div>
             </div>
 
-            <div class="coefficient-note">
-              Fixed coefficient: <strong>170</strong>
+            <div class="coefficient-note" id="coefficientNote">
+              Running coefficient: <strong>170</strong>
             </div>
 
             <div class="actions">
@@ -380,8 +381,8 @@
 
             <div class="field" style="margin-top: 1rem;">
               <label for="subtractMinutes">Subtract used minutes</label>
-              <input id="subtractMinutes" type="number" min="1" value="15" />
-              <span class="hint">Use this when gameplay minutes are spent.</span>
+                <input id="subtractMinutes" type="text" value="15m" />
+                <span class="hint">Use values like 45m, 1h, or 1h20m.</span>
             </div>
 
             <div class="ledger-actions" style="margin-top: 1rem;">
@@ -397,7 +398,11 @@
     </main>
 
     <script>
-      const FIXED_COEFFICIENT = 170;
+      const COEFFICIENTS = {
+        Running: 170,
+        Cycling: 350,
+        Gym: 250
+      };
 
       const form = document.getElementById("calculator");
       const addButton = document.getElementById("addButton");
@@ -410,6 +415,7 @@
       const durationField = document.getElementById("duration");
       const bonusField = document.getElementById("bonus");
       const subtractMinutesField = document.getElementById("subtractMinutes");
+      const coefficientNote = document.getElementById("coefficientNote");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
       const resultSentence = document.getElementById("resultSentence");
@@ -426,16 +432,59 @@
         }).format(Math.round(value));
       }
 
+      function formatMinutes(value) {
+        const rounded = Math.max(0, Math.round(value));
+        const hours = Math.floor(rounded / 60);
+        const minutes = rounded % 60;
+
+        if (hours && minutes) {
+          return `${hours}h ${minutes}m`;
+        }
+
+        if (hours) {
+          return `${hours}h`;
+        }
+
+        return `${minutes}m`;
+      }
+
+      function parseMinutesInput(value) {
+        const normalized = String(value).trim().toLowerCase().replace(/\s+/g, "");
+
+        if (!normalized) {
+          return 0;
+        }
+
+        if (/^\d+$/.test(normalized)) {
+          return Number(normalized);
+        }
+
+        let total = 0;
+        const hoursMatch = normalized.match(/(\d+)h/);
+        const minutesMatch = normalized.match(/(\d+)m/);
+
+        if (hoursMatch) {
+          total += Number(hoursMatch[1]) * 60;
+        }
+
+        if (minutesMatch) {
+          total += Number(minutesMatch[1]);
+        }
+
+        return total;
+      }
+
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
         const duration = Number(durationField.value) || 0;
         const bonus = Math.max(Number(bonusField.value) || 0, 0);
-
-        const total = Math.max((heartRate * duration) / FIXED_COEFFICIENT + bonus, 0);
+        const coefficient = COEFFICIENTS[activity];
+        const total = Math.max((heartRate * duration) / coefficient + bonus, 0);
 
         return {
           activity,
+          coefficient,
           heartRate,
           duration,
           bonus,
@@ -446,14 +495,15 @@
       function updatePreview() {
         const session = calculateSession();
 
-        earnedMinutes.textContent = `${formatWhole(session.totalRounded)} min`;
+        coefficientNote.innerHTML = `${session.activity} coefficient: <strong>${session.coefficient}</strong>`;
+        earnedMinutes.textContent = formatMinutes(session.totalRounded);
         resultSentence.textContent =
           `A ${session.duration}-minute ${session.activity.toLowerCase()} session at ` +
-          `${session.heartRate} bpm earns ${formatWhole(session.totalRounded)} minutes of gameplay.`;
+          `${session.heartRate} bpm earns ${formatMinutes(session.totalRounded)} of gameplay.`;
       }
 
       function renderLedger() {
-        balanceMinutes.textContent = `${formatWhole(balance)} min`;
+        balanceMinutes.textContent = formatMinutes(balance);
         ledgerList.innerHTML = "";
 
         if (ledger.length === 0) {
@@ -476,7 +526,7 @@
 
           const amount = document.createElement("span");
           amount.className = `ledger-amount ${entry.type}`;
-          amount.textContent = `${entry.type === "plus" ? "+" : "-"}${formatWhole(entry.minutes)} min`;
+          amount.textContent = `${entry.type === "plus" ? "+" : "-"}${formatMinutes(entry.minutes)}`;
 
           const meta = document.createElement("div");
           meta.className = "ledger-meta";
@@ -518,7 +568,7 @@
       });
 
       subtractButton.addEventListener("click", function () {
-        const subtractMinutes = Math.max(Number(subtractMinutesField.value) || 0, 0);
+        const subtractMinutes = Math.max(parseMinutesInput(subtractMinutesField.value), 0);
 
         if (!subtractMinutes) {
           return;
@@ -547,6 +597,7 @@
         heartRateField.value = "145";
         durationField.value = "30";
         bonusField.value = "0";
+        subtractMinutesField.value = "15m";
         updatePreview();
       });
 
