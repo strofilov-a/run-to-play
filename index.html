@@ -296,6 +296,27 @@
         font-size: 0.88rem;
       }
 
+      .control-gate {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.56);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+      }
+
+      .locked-copy {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .control-panel {
+        margin-top: 1rem;
+      }
+
+      .control-panel[hidden] {
+        display: none;
+      }
+
       .hidden-input {
         display: none;
       }
@@ -394,47 +415,6 @@
         <section class="card main-card">
           <h2 class="section-title">Конвертер</h2>
 
-          <form id="calculator">
-            <div class="grid">
-              <div class="field full">
-                <label for="activity">Активность</label>
-                <select id="activity" name="activity">
-                  <option value="Running">Running</option>
-                  <option value="Cycling">Cycling</option>
-                  <option value="Gym">Gym</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="heartRate">Средний пульс</label>
-                <input id="heartRate" name="heartRate" type="number" min="0" value="0" />
-                <span class="hint">Удары в минуту.</span>
-              </div>
-
-              <div class="field">
-                <label for="duration">Время активности</label>
-                <input id="duration" name="duration" type="text" value="0" />
-                <span class="hint">Можно писать `90`, `1h`, `1h 30m`.</span>
-              </div>
-
-              <div class="field full">
-                <label for="bonus">Бонусные минуты</label>
-                <input id="bonus" name="bonus" type="number" min="0" value="0" />
-                <span class="hint">Например за старание, дисциплину или помощь.</span>
-              </div>
-            </div>
-
-            <div class="note" id="coefficientNote">
-              Running coefficient: <strong>170</strong>
-            </div>
-
-            <div class="actions">
-              <button class="primary" type="submit">Посчитать</button>
-              <button class="secondary" id="addButton" type="button">Добавить в лог</button>
-              <button class="secondary" id="resetButton" type="button">Сброс</button>
-            </div>
-          </form>
-
           <div class="summary">
             <p class="kicker">Эта тренировка даёт</p>
             <h2 class="big-number" id="earnedMinutes">0m</h2>
@@ -465,6 +445,7 @@
             <div class="actions">
               <button class="primary" id="fetchLinkButton" type="button">Заполнить из ссылки</button>
               <button class="secondary" id="applyDetectedButton" type="button">Подставить найденное</button>
+              <button class="secondary" id="quickAddButton" type="button">Добавить найденное в лог</button>
             </div>
 
             <div class="ocr-status" id="ocrStatus">
@@ -480,6 +461,81 @@
                 <strong id="detectedDuration">-</strong>
                 <span>Найденное время</span>
               </div>
+            </div>
+          </div>
+
+          <div class="control-gate">
+            <h3 class="section-title" style="margin-bottom: 0.25rem;">Control Center</h3>
+            <p class="locked-copy" id="controlHint">
+              Для ребёнка достаточно вставить ссылку выше. Ручной ввод и редактирование коэффициентов закрыты кодом.
+            </p>
+
+            <div class="grid" style="margin-top: 1rem;">
+              <div class="field">
+                <label for="controlCode">Код доступа</label>
+                <input id="controlCode" type="password" inputmode="numeric" placeholder="Введите код" />
+              </div>
+              <div class="field" style="align-content: end;">
+                <button class="secondary" id="unlockButton" type="button">Открыть Control Center</button>
+              </div>
+            </div>
+
+            <div class="control-panel" id="controlPanel" hidden>
+              <form id="calculator">
+                <div class="grid">
+                  <div class="field full">
+                    <label for="activity">Активность</label>
+                    <select id="activity" name="activity">
+                      <option value="Running">Running</option>
+                      <option value="Cycling">Cycling</option>
+                      <option value="Gym">Gym</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="heartRate">Средний пульс</label>
+                    <input id="heartRate" name="heartRate" type="number" min="0" value="0" />
+                    <span class="hint">Удары в минуту.</span>
+                  </div>
+
+                  <div class="field">
+                    <label for="duration">Время активности</label>
+                    <input id="duration" name="duration" type="text" value="0" />
+                    <span class="hint">Можно писать `90`, `1h`, `1h 30m`.</span>
+                  </div>
+
+                  <div class="field full">
+                    <label for="bonus">Бонусные минуты</label>
+                    <input id="bonus" name="bonus" type="number" min="0" value="0" />
+                    <span class="hint">Например за старание, дисциплину или помощь.</span>
+                  </div>
+
+                  <div class="field">
+                    <label for="runningCoefficient">Running coefficient</label>
+                    <input id="runningCoefficient" type="number" min="1" value="170" />
+                  </div>
+
+                  <div class="field">
+                    <label for="cyclingCoefficient">Cycling coefficient</label>
+                    <input id="cyclingCoefficient" type="number" min="1" value="230" />
+                  </div>
+
+                  <div class="field">
+                    <label for="gymCoefficient">Gym coefficient</label>
+                    <input id="gymCoefficient" type="number" min="1" value="250" />
+                  </div>
+                </div>
+
+                <div class="note" id="coefficientNote">
+                  Running coefficient: <strong>170</strong>
+                </div>
+
+                <div class="actions">
+                  <button class="primary" type="submit">Посчитать</button>
+                  <button class="secondary" id="addButton" type="button">Добавить в лог</button>
+                  <button class="secondary" id="resetButton" type="button">Сброс</button>
+                </div>
+              </form>
             </div>
           </div>
         </section>
@@ -512,6 +568,7 @@
     </main>
 
     <script>
+      const CONTROL_CODE = "4798";
       const COEFFICIENTS = {
         Running: 170,
         Cycling: 230,
@@ -519,13 +576,21 @@
       };
 
       const form = document.getElementById("calculator");
+      const controlCodeField = document.getElementById("controlCode");
+      const unlockButton = document.getElementById("unlockButton");
+      const controlPanel = document.getElementById("controlPanel");
+      const controlHint = document.getElementById("controlHint");
       const activityField = document.getElementById("activity");
       const heartRateField = document.getElementById("heartRate");
       const durationField = document.getElementById("duration");
       const bonusField = document.getElementById("bonus");
       const coefficientNote = document.getElementById("coefficientNote");
+      const runningCoefficientField = document.getElementById("runningCoefficient");
+      const cyclingCoefficientField = document.getElementById("cyclingCoefficient");
+      const gymCoefficientField = document.getElementById("gymCoefficient");
 
       const addButton = document.getElementById("addButton");
+      const quickAddButton = document.getElementById("quickAddButton");
       const resetButton = document.getElementById("resetButton");
       const subtractButton = document.getElementById("subtractButton");
       const clearLogButton = document.getElementById("clearLogButton");
@@ -550,6 +615,7 @@
         heartRate: null,
         durationMinutes: null
       };
+      let controlUnlocked = false;
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -602,12 +668,21 @@
         });
       }
 
+      function getCurrentCoefficients() {
+        return {
+          Running: Math.max(Number(runningCoefficientField.value) || 1, 1),
+          Cycling: Math.max(Number(cyclingCoefficientField.value) || 1, 1),
+          Gym: Math.max(Number(gymCoefficientField.value) || 1, 1)
+        };
+      }
+
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
         const duration = Math.max(parseMinutesInput(durationField.value), 0);
         const bonus = Math.max(Number(bonusField.value) || 0, 0);
-        const coefficient = COEFFICIENTS[activity];
+        const coefficients = getCurrentCoefficients();
+        const coefficient = coefficients[activity];
         const total = Math.max((heartRate * duration) / coefficient + bonus, 0);
 
         return {
@@ -672,6 +747,21 @@
       function addLedgerEntry(entry) {
         ledger.unshift(entry);
         renderLedger();
+      }
+
+      function addCurrentSessionToLog() {
+        const session = calculateSession();
+        balance += session.totalRounded;
+
+        addLedgerEntry({
+          type: "plus",
+          title: `${session.activity} added`,
+          minutes: session.totalRounded,
+          meta:
+            `${session.duration} min at ${session.heartRate} bpm` +
+            `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
+          timestamp: `Added ${getTimestampLabel()}`
+        });
       }
 
       function setOcrStatus(message, tone) {
@@ -741,20 +831,13 @@
         field.addEventListener("change", updatePreview);
       });
 
-      addButton.addEventListener("click", function () {
-        const session = calculateSession();
-        balance += session.totalRounded;
-
-        addLedgerEntry({
-          type: "plus",
-          title: `${session.activity} added`,
-          minutes: session.totalRounded,
-          meta:
-            `${session.duration} min at ${session.heartRate} bpm` +
-            `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
-          timestamp: `Added ${getTimestampLabel()}`
-        });
+      [runningCoefficientField, cyclingCoefficientField, gymCoefficientField].forEach(function (field) {
+        field.addEventListener("input", updatePreview);
+        field.addEventListener("change", updatePreview);
       });
+
+      addButton.addEventListener("click", addCurrentSessionToLog);
+      quickAddButton.addEventListener("click", addCurrentSessionToLog);
 
       subtractButton.addEventListener("click", function () {
         const subtractMinutes = Math.max(parseMinutesInput(subtractMinutesField.value), 0);
@@ -789,6 +872,20 @@
         bonusField.value = "0";
         subtractMinutesField.value = "0";
         updatePreview();
+      });
+
+      unlockButton.addEventListener("click", function () {
+        if (controlCodeField.value === CONTROL_CODE) {
+          controlUnlocked = true;
+          controlPanel.hidden = false;
+          controlHint.textContent = "Control Center открыт. Можно вручную менять значения и коэффициенты.";
+          setOcrStatus("Control Center открыт.", "good");
+          return;
+        }
+
+        controlUnlocked = false;
+        controlPanel.hidden = true;
+        controlHint.textContent = "Неверный код. Для ребёнка режим по ссылке остаётся доступным.";
       });
 
       fetchLinkButton.addEventListener("click", fetchActivityFromLink);
