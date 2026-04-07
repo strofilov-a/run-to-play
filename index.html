@@ -473,6 +473,7 @@
             <button class="primary" id="signUpButton" type="button">Sign Up</button>
             <button class="secondary" id="logInButton" type="button">Log In</button>
             <button class="secondary" id="logOutButton" type="button">Log Out</button>
+            <button class="secondary" id="syncNowButton" type="button">Sync now</button>
           </div>
 
           <div class="auth-status" id="authStatus">
@@ -680,6 +681,7 @@
       const signUpButton = document.getElementById("signUpButton");
       const logInButton = document.getElementById("logInButton");
       const logOutButton = document.getElementById("logOutButton");
+      const syncNowButton = document.getElementById("syncNowButton");
       const authStatus = document.getElementById("authStatus");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
@@ -1194,7 +1196,6 @@
         currentUser = data.user || null;
         authPasswordField.value = "";
         if (currentUser) {
-          await persistState();
           await loadRemoteState();
         } else {
           setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
@@ -1222,7 +1223,6 @@
 
         currentUser = data.user;
         authPasswordField.value = "";
-        await persistState();
         await loadRemoteState();
       });
 
@@ -1230,6 +1230,15 @@
         await supabase.auth.signOut();
         currentUser = null;
         setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
+      });
+
+      syncNowButton.addEventListener("click", async function () {
+        if (!currentUser) {
+          setAuthStatus("Сначала войдите, потом можно синхронизировать данные в облако.", "bad");
+          return;
+        }
+
+        await persistState();
       });
 
       const {
