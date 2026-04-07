@@ -829,17 +829,22 @@
           return;
         }
 
+        const payload = {
+          user_id: currentUser.id,
+          ledger,
+          coefficients: getCurrentCoefficients()
+        };
+
         const { error } = await supabase
           .from("family_state")
-          .upsert({
-            user_id: currentUser.id,
-            ledger,
-            coefficients: getCurrentCoefficients()
-          });
+          .upsert(payload);
 
         if (error) {
           setAuthStatus("Вход выполнен, но не удалось сохранить данные в облако. Проверь SQL в Supabase.", "bad");
+          return;
         }
+
+        setAuthStatus(`Данные семьи сохранены в облаке для ${currentUser.email}.`, "good");
       }
 
       async function loadRemoteState() {
@@ -858,14 +863,19 @@
           return;
         }
 
+        const hasLocalLedger = Array.isArray(ledger) && ledger.length > 0;
+        const hasRemoteLedger = Array.isArray(data?.ledger) && data.ledger.length > 0;
+
         if (!data) {
           await persistState();
           setAuthStatus(`Вы вошли как ${currentUser.email}. Создано новое облачное хранилище семьи.`, "good");
           return;
         }
 
-        if (Array.isArray(data.ledger)) {
+        if (hasRemoteLedger) {
           ledger = data.ledger;
+        } else if (hasLocalLedger) {
+          await persistState();
         }
 
         if (data.coefficients) {
@@ -1184,6 +1194,7 @@
         currentUser = data.user || null;
         authPasswordField.value = "";
         if (currentUser) {
+          await persistState();
           await loadRemoteState();
         } else {
           setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
@@ -1211,6 +1222,7 @@
 
         currentUser = data.user;
         authPasswordField.value = "";
+        await persistState();
         await loadRemoteState();
       });
 
