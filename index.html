@@ -188,6 +188,11 @@
         color: var(--text);
       }
 
+      .success {
+        color: white;
+        background: linear-gradient(135deg, #1c8c57 0%, #3eb97c 100%);
+      }
+
       .danger {
         color: white;
         background: linear-gradient(135deg, #c34b37 0%, #e58467 100%);
@@ -444,8 +449,7 @@
 
             <div class="actions">
               <button class="primary" id="fetchLinkButton" type="button">Заполнить из ссылки</button>
-              <button class="secondary" id="applyDetectedButton" type="button">Подставить найденное</button>
-              <button class="secondary" id="quickAddButton" type="button">Добавить найденное в лог</button>
+              <button class="success" id="quickAddButton" type="button">Добавить</button>
             </div>
 
             <div class="ocr-status" id="ocrStatus">
@@ -481,6 +485,10 @@
             </div>
 
             <div class="control-panel" id="controlPanel" hidden>
+              <div class="actions" style="margin-bottom: 1rem;">
+                <button class="secondary" id="closeControlButton" type="button">Закрыть Control Center</button>
+              </div>
+
               <form id="calculator">
                 <div class="grid">
                   <div class="field full">
@@ -578,6 +586,7 @@
       const form = document.getElementById("calculator");
       const controlCodeField = document.getElementById("controlCode");
       const unlockButton = document.getElementById("unlockButton");
+      const closeControlButton = document.getElementById("closeControlButton");
       const controlPanel = document.getElementById("controlPanel");
       const controlHint = document.getElementById("controlHint");
       const activityField = document.getElementById("activity");
@@ -604,7 +613,6 @@
 
       const activityUrlField = document.getElementById("activityUrl");
       const fetchLinkButton = document.getElementById("fetchLinkButton");
-      const applyDetectedButton = document.getElementById("applyDetectedButton");
       const ocrStatus = document.getElementById("ocrStatus");
       const detectedHeartRate = document.getElementById("detectedHeartRate");
       const detectedDuration = document.getElementById("detectedDuration");
@@ -615,7 +623,7 @@
         heartRate: null,
         durationMinutes: null
       };
-      let controlUnlocked = false;
+      const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -674,6 +682,36 @@
           Cycling: Math.max(Number(cyclingCoefficientField.value) || 1, 1),
           Gym: Math.max(Number(gymCoefficientField.value) || 1, 1)
         };
+      }
+
+      function saveCoefficients() {
+        localStorage.setItem(COEFFICIENT_STORAGE_KEY, JSON.stringify(getCurrentCoefficients()));
+      }
+
+      function loadCoefficients() {
+        try {
+          const raw = localStorage.getItem(COEFFICIENT_STORAGE_KEY);
+
+          if (!raw) {
+            return;
+          }
+
+          const parsed = JSON.parse(raw);
+
+          if (parsed.Running) {
+            runningCoefficientField.value = parsed.Running;
+          }
+
+          if (parsed.Cycling) {
+            cyclingCoefficientField.value = parsed.Cycling;
+          }
+
+          if (parsed.Gym) {
+            gymCoefficientField.value = parsed.Gym;
+          }
+        } catch (error) {
+          return;
+        }
       }
 
       function calculateSession() {
@@ -834,6 +872,8 @@
       [runningCoefficientField, cyclingCoefficientField, gymCoefficientField].forEach(function (field) {
         field.addEventListener("input", updatePreview);
         field.addEventListener("change", updatePreview);
+        field.addEventListener("input", saveCoefficients);
+        field.addEventListener("change", saveCoefficients);
       });
 
       addButton.addEventListener("click", addCurrentSessionToLog);
@@ -876,29 +916,24 @@
 
       unlockButton.addEventListener("click", function () {
         if (controlCodeField.value === CONTROL_CODE) {
-          controlUnlocked = true;
           controlPanel.hidden = false;
           controlHint.textContent = "Control Center открыт. Можно вручную менять значения и коэффициенты.";
           setOcrStatus("Control Center открыт.", "good");
           return;
         }
 
-        controlUnlocked = false;
         controlPanel.hidden = true;
         controlHint.textContent = "Неверный код. Для ребёнка режим по ссылке остаётся доступным.";
       });
 
-      fetchLinkButton.addEventListener("click", fetchActivityFromLink);
-      applyDetectedButton.addEventListener("click", function () {
-        applyDetectedValues();
-
-        if (detectedValues.heartRate !== null || detectedValues.durationMinutes !== null) {
-          setOcrStatus("Найденные значения подставлены в поля.", "good");
-        } else {
-          setOcrStatus("Пока нечего подставлять. Сначала распознайте скриншот.", "bad");
-        }
+      closeControlButton.addEventListener("click", function () {
+        controlPanel.hidden = true;
+        controlHint.textContent = "Control Center закрыт. Ручной ввод снова скрыт.";
       });
 
+      fetchLinkButton.addEventListener("click", fetchActivityFromLink);
+
+      loadCoefficients();
       updateDetectedDisplay();
       updatePreview();
       renderLedger();
