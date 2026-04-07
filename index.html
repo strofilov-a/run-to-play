@@ -905,12 +905,12 @@
       });
 
       resetButton.addEventListener("click", function () {
-        form.reset();
         activityField.value = "Running";
         heartRateField.value = "0";
         durationField.value = "0";
         bonusField.value = "0";
         subtractMinutesField.value = "0";
+        loadCoefficients();
         updatePreview();
       });
 
