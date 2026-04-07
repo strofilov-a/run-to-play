@@ -1,25 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Run To Play</title>
+    <title>Run to Play</title>
+    <meta
+      name="description"
+      content="Конвертер активности ребёнка в минуты игры: загрузка скриншота Strava, автоподстановка пульса и времени, учёт баланса."
+    />
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6efe4;
-        --panel: rgba(255, 251, 244, 0.84);
-        --panel-strong: #fff9f1;
-        --text: #1c140d;
-        --muted: #6b5a49;
-        --line: rgba(78, 57, 29, 0.12);
-        --accent: #ef6b1f;
-        --accent-soft: #ffb26b;
-        --success: #1f7a4e;
-        --danger: #b94128;
-        --shadow: 0 24px 60px rgba(86, 56, 26, 0.16);
-        --radius: 28px;
-        font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --bg: #f7efe5;
+        --surface: rgba(255, 251, 246, 0.84);
+        --surface-strong: #fffaf4;
+        --text: #201812;
+        --muted: #6d5a4d;
+        --line: rgba(67, 42, 23, 0.12);
+        --accent: #ea6f2f;
+        --accent-soft: #f6ac71;
+        --good: #1f7a53;
+        --bad: #b7462d;
+        --shadow: 0 26px 70px rgba(78, 49, 21, 0.14);
+        --radius-xl: 30px;
+        --radius-lg: 22px;
+        --radius-md: 16px;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
       }
 
       * {
@@ -28,32 +34,30 @@
 
       body {
         margin: 0;
-        min-height: 100vh;
         color: var(--text);
         background:
-          radial-gradient(circle at top left, rgba(255, 207, 143, 0.94), transparent 28%),
-          radial-gradient(circle at top right, rgba(255, 150, 102, 0.48), transparent 25%),
-          linear-gradient(160deg, #fff9f0 0%, #f5ecdf 52%, #eadcc8 100%);
+          radial-gradient(circle at 15% 12%, rgba(234, 111, 47, 0.18), transparent 24%),
+          radial-gradient(circle at 84% 10%, rgba(246, 172, 113, 0.25), transparent 20%),
+          linear-gradient(180deg, #fbf5ed 0%, #f4eadc 52%, #eadbc8 100%);
       }
 
       .page {
-        width: min(1160px, calc(100% - 2rem));
+        width: min(1140px, calc(100% - 2rem));
         margin: 0 auto;
         padding: 2rem 0 3rem;
       }
 
       .hero {
-        padding: 1rem 0 1.5rem;
+        padding: 0.5rem 0 1.5rem;
       }
 
       .eyebrow {
-        display: inline-block;
-        margin-bottom: 1rem;
+        display: inline-flex;
         padding: 0.45rem 0.9rem;
-        border: 1px solid rgba(239, 107, 31, 0.2);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.6);
-        color: #b44a12;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(234, 111, 47, 0.2);
+        color: #b64b18;
         font-size: 0.82rem;
         font-weight: 800;
         letter-spacing: 0.08em;
@@ -61,37 +65,50 @@
       }
 
       h1 {
-        margin: 0;
-        max-width: 11ch;
-        font-size: clamp(2.8rem, 7vw, 5.8rem);
-        line-height: 0.94;
-        letter-spacing: -0.06em;
+        margin: 1rem 0 0;
+        max-width: 10ch;
+        font-size: clamp(3rem, 8vw, 6rem);
+        line-height: 0.92;
+        letter-spacing: -0.07em;
+      }
+
+      .subhead {
+        max-width: 58ch;
+        margin: 1rem 0 0;
+        color: var(--muted);
+        line-height: 1.7;
       }
 
       .layout {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-        gap: 1.25rem;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+        gap: 1.1rem;
         align-items: start;
       }
 
       .card {
         border: 1px solid var(--line);
-        border-radius: var(--radius);
-        background: var(--panel);
-        backdrop-filter: blur(14px);
+        border-radius: var(--radius-xl);
+        background: var(--surface);
+        backdrop-filter: blur(16px);
         box-shadow: var(--shadow);
       }
 
-      .calculator,
-      .sidebar {
-        padding: 1.5rem;
+      .main-card,
+      .side-card {
+        padding: 1.35rem;
+      }
+
+      .section-title {
+        margin: 0 0 0.8rem;
+        font-size: 1.25rem;
+        letter-spacing: -0.04em;
       }
 
       .grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
+        gap: 0.9rem;
       }
 
       .field {
@@ -110,15 +127,16 @@
 
       .hint {
         color: var(--muted);
-        font-size: 0.85rem;
+        font-size: 0.84rem;
+        line-height: 1.45;
       }
 
       input,
       select {
         width: 100%;
         padding: 0.95rem 1rem;
-        border: 1px solid rgba(78, 57, 29, 0.14);
-        border-radius: 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(67, 42, 23, 0.14);
         background: rgba(255, 255, 255, 0.86);
         color: var(--text);
         font: inherit;
@@ -126,17 +144,8 @@
 
       input:focus,
       select:focus {
-        outline: 2px solid rgba(239, 107, 31, 0.24);
-        border-color: rgba(239, 107, 31, 0.5);
-      }
-
-      .coefficient-note {
-        margin-top: 1rem;
-        padding: 0.95rem 1rem;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.64);
-        border: 1px solid rgba(78, 57, 29, 0.08);
-        color: var(--muted);
+        outline: 2px solid rgba(234, 111, 47, 0.22);
+        border-color: rgba(234, 111, 47, 0.45);
       }
 
       .actions,
@@ -144,86 +153,151 @@
         display: flex;
         gap: 0.75rem;
         flex-wrap: wrap;
+        margin-top: 1rem;
       }
 
-      .actions {
-        margin-top: 1.25rem;
-      }
-
-      button {
-        border: 0;
+      button,
+      .upload-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.95rem 1.25rem;
         border-radius: 999px;
-        padding: 0.95rem 1.35rem;
+        border: 1px solid transparent;
         font: inherit;
         font-weight: 800;
         cursor: pointer;
-        transition: transform 160ms ease, opacity 160ms ease;
+        transition: transform 160ms ease;
       }
 
-      button:hover {
+      button:hover,
+      .upload-label:hover {
         transform: translateY(-1px);
       }
 
       .primary {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-soft) 100%);
         color: white;
+        background: linear-gradient(135deg, #c94f18 0%, var(--accent) 52%, var(--accent-soft) 100%);
       }
 
-      .secondary {
-        background: rgba(255, 255, 255, 0.8);
+      .secondary,
+      .upload-label {
+        background: rgba(255, 255, 255, 0.78);
+        border-color: rgba(67, 42, 23, 0.1);
         color: var(--text);
-        border: 1px solid rgba(78, 57, 29, 0.1);
       }
 
       .danger {
-        background: linear-gradient(135deg, #d6563d 0%, #ee8861 100%);
         color: white;
+        background: linear-gradient(135deg, #c34b37 0%, #e58467 100%);
       }
 
-      .summary-box {
-        padding: 1.3rem;
-        border-radius: 22px;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 247, 238, 0.84)),
-          rgba(255, 255, 255, 0.8);
-        border: 1px solid rgba(239, 107, 31, 0.12);
-      }
-
-      .summary-box + .summary-box {
-        margin-top: 1rem;
+      .summary {
+        margin-top: 1.2rem;
+        padding: 1.2rem;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 245, 236, 0.88));
+        border: 1px solid rgba(234, 111, 47, 0.12);
       }
 
       .kicker {
         margin: 0;
         color: var(--muted);
-        font-size: 0.9rem;
-        text-transform: uppercase;
+        font-size: 0.82rem;
+        font-weight: 800;
         letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       .big-number {
-        margin: 0.35rem 0 0;
+        margin: 0.4rem 0 0;
         font-size: clamp(2.8rem, 7vw, 4.8rem);
-        line-height: 0.95;
-        letter-spacing: -0.07em;
+        line-height: 0.92;
+        letter-spacing: -0.08em;
       }
 
       .summary-copy {
         margin: 0.75rem 0 0;
         color: var(--muted);
-        line-height: 1.5;
+        line-height: 1.55;
       }
 
-      .ledger-header {
+      .note {
+        margin-top: 1rem;
+        padding: 0.95rem 1rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+        color: var(--muted);
+      }
+
+      .ocr-box {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.56);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+      }
+
+      .ocr-header {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        align-items: end;
+        align-items: start;
       }
 
-      .ledger-header h2 {
-        margin: 0;
+      .ocr-status {
+        margin-top: 0.8rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .ocr-status.good {
+        color: var(--good);
+      }
+
+      .ocr-status.bad {
+        color: var(--bad);
+      }
+
+      .preview {
+        margin-top: 1rem;
+        display: none;
+        width: 100%;
+        max-height: 340px;
+        object-fit: contain;
+        border-radius: 20px;
+        border: 1px solid rgba(67, 42, 23, 0.08);
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      .ocr-result {
+        margin-top: 1rem;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .ocr-stat {
+        padding: 0.9rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+      }
+
+      .ocr-stat strong {
+        display: block;
         font-size: 1.2rem;
+      }
+
+      .ocr-stat span {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .hidden-input {
+        display: none;
       }
 
       .ledger-list {
@@ -231,19 +305,19 @@
         margin: 1rem 0 0;
         padding: 0;
         display: grid;
-        gap: 0.8rem;
+        gap: 0.75rem;
       }
 
       .ledger-item {
         display: grid;
-        gap: 0.3rem;
+        gap: 0.35rem;
         padding: 1rem;
         border-radius: 18px;
-        background: var(--panel-strong);
-        border: 1px solid rgba(78, 57, 29, 0.08);
+        background: var(--surface-strong);
+        border: 1px solid rgba(67, 42, 23, 0.08);
       }
 
-      .ledger-topline {
+      .ledger-top {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
@@ -254,13 +328,13 @@
         font-weight: 800;
       }
 
-      .ledger-amount.plus {
-        color: var(--success);
+      .ledger-value.plus {
+        color: var(--good);
         font-weight: 800;
       }
 
-      .ledger-amount.minus {
-        color: var(--danger);
+      .ledger-value.minus {
+        color: var(--bad);
         font-weight: 800;
       }
 
@@ -271,26 +345,24 @@
 
       .ledger-time {
         display: inline-flex;
-        align-items: center;
         width: fit-content;
-        margin-top: 0.35rem;
+        margin-top: 0.25rem;
         padding: 0.28rem 0.62rem;
         border-radius: 999px;
-        background: rgba(239, 107, 31, 0.1);
-        border: 1px solid rgba(239, 107, 31, 0.14);
+        background: rgba(234, 111, 47, 0.1);
+        border: 1px solid rgba(234, 111, 47, 0.14);
         color: #9f4715;
         font-size: 0.8rem;
         font-weight: 700;
-        letter-spacing: 0.02em;
       }
 
       .empty {
-        margin: 1rem 0 0;
+        margin-top: 1rem;
         padding: 1rem;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.6);
+        border: 1px dashed rgba(67, 42, 23, 0.14);
         color: var(--muted);
-        border: 1px dashed rgba(78, 57, 29, 0.14);
+        background: rgba(255, 255, 255, 0.54);
       }
 
       @media (max-width: 920px) {
@@ -300,25 +372,33 @@
       }
 
       @media (max-width: 720px) {
-        .grid {
+        .grid,
+        .ocr-result {
           grid-template-columns: 1fr;
         }
       }
     </style>
+    <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   </head>
   <body>
     <main class="page">
       <section class="hero">
-        <span class="eyebrow">Run To Play</span>
-        <h1>Turn exercise into game minutes.</h1>
+        <span class="eyebrow">Run to Play</span>
+        <h1>Активность в минуты игры.</h1>
+        <p class="subhead">
+          Загрузи скриншот из Strava, попробуй автоматически вытащить пульс и время,
+          а затем прибавь заработанные минуты в баланс ребёнка.
+        </p>
       </section>
 
       <section class="layout">
-        <section class="card calculator">
+        <section class="card main-card">
+          <h2 class="section-title">Конвертер</h2>
+
           <form id="calculator">
             <div class="grid">
               <div class="field full">
-                <label for="activity">Activity</label>
+                <label for="activity">Активность</label>
                 <select id="activity" name="activity">
                   <option value="Running">Running</option>
                   <option value="Cycling">Cycling</option>
@@ -327,71 +407,98 @@
               </div>
 
               <div class="field">
-                <label for="heartRate">Average heart rate</label>
+                <label for="heartRate">Средний пульс</label>
                 <input id="heartRate" name="heartRate" type="number" min="0" value="0" />
-                <span class="hint">Beats per minute during the session.</span>
+                <span class="hint">Удары в минуту.</span>
               </div>
 
               <div class="field">
-                <label for="duration">Active time</label>
+                <label for="duration">Время активности</label>
                 <input id="duration" name="duration" type="number" min="0" value="0" />
-                <span class="hint">Minutes spent moving.</span>
+                <span class="hint">Минуты.</span>
               </div>
 
               <div class="field full">
-                <label for="bonus">Bonus minutes</label>
+                <label for="bonus">Бонусные минуты</label>
                 <input id="bonus" name="bonus" type="number" min="0" value="0" />
-                <span class="hint">Optional extra minutes for effort, attitude, or chores.</span>
+                <span class="hint">Например за старание, дисциплину или помощь.</span>
               </div>
             </div>
 
-            <div class="coefficient-note" id="coefficientNote">
+            <div class="note" id="coefficientNote">
               Running coefficient: <strong>170</strong>
             </div>
 
             <div class="actions">
-              <button class="primary" type="submit">Calculate minutes</button>
-              <button class="secondary" id="addButton" type="button">Add to log</button>
-              <button class="secondary" id="resetButton" type="button">Reset</button>
+              <button class="primary" type="submit">Посчитать</button>
+              <button class="secondary" id="addButton" type="button">Добавить в лог</button>
+              <button class="secondary" id="resetButton" type="button">Сброс</button>
             </div>
           </form>
 
-          <div class="summary-box" style="margin-top: 1.25rem;">
-            <p class="kicker">This session earns</p>
+          <div class="summary">
+            <p class="kicker">Эта тренировка даёт</p>
             <h2 class="big-number" id="earnedMinutes">0m</h2>
             <p class="summary-copy" id="resultSentence">
-              A 0-minute running session at 0 bpm earns 0m of gameplay.
+              Активность на 0 минут при 0 bpm даёт 0m игрового времени.
             </p>
           </div>
-        </section>
 
-        <aside class="card sidebar">
-          <div class="summary-box">
-            <p class="kicker">Available balance</p>
-            <h2 class="big-number" id="balanceMinutes">0m</h2>
-            <p class="summary-copy">Stack earned time, then subtract minutes when gameplay gets used.</p>
-          </div>
-
-          <div class="summary-box">
-            <div class="ledger-header">
+          <div class="ocr-box">
+            <div class="ocr-header">
               <div>
-                <p class="kicker">Minute log</p>
-                <h2>Activity ledger</h2>
+                <h3 class="section-title" style="margin-bottom: 0.25rem;">Скриншот Strava</h3>
+                <div class="hint">Загрузи скрин, и сайт попробует сам вставить пульс и время.</div>
               </div>
             </div>
 
-            <div class="field" style="margin-top: 1rem;">
-              <label for="subtractMinutes">Subtract used minutes</label>
+            <div class="actions">
+              <label class="upload-label" for="screenshotInput">Загрузить скриншот</label>
+              <input class="hidden-input" id="screenshotInput" type="file" accept="image/*" />
+              <button class="secondary" id="scanButton" type="button">Распознать</button>
+              <button class="secondary" id="applyDetectedButton" type="button">Подставить найденное</button>
+            </div>
+
+            <div class="ocr-status" id="ocrStatus">
+              Пока ничего не загружено.
+            </div>
+
+            <img class="preview" id="imagePreview" alt="Предпросмотр загруженного скриншота" />
+
+            <div class="ocr-result">
+              <div class="ocr-stat">
+                <strong id="detectedHeartRate">-</strong>
+                <span>Найденный пульс</span>
+              </div>
+              <div class="ocr-stat">
+                <strong id="detectedDuration">-</strong>
+                <span>Найденное время</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="card side-card">
+          <div class="summary">
+            <p class="kicker">Доступный баланс</p>
+            <h2 class="big-number" id="balanceMinutes">0m</h2>
+            <p class="summary-copy">Можно накапливать минуты, а потом вычитать, когда ребёнок играет.</p>
+          </div>
+
+          <div class="summary">
+            <p class="kicker">Списать минуты</p>
+            <div class="field" style="margin-top: 0.9rem;">
+              <label for="subtractMinutes">Сколько потратили</label>
               <input id="subtractMinutes" type="text" value="15m" />
-              <span class="hint">Use values like 45m, 1h, or 1h20m.</span>
+              <span class="hint">Можно писать `45m`, `1h`, `1h20m`.</span>
             </div>
 
-            <div class="ledger-actions" style="margin-top: 1rem;">
-              <button class="danger" id="subtractButton" type="button">Subtract from balance</button>
-              <button class="secondary" id="clearLogButton" type="button">Clear log</button>
+            <div class="ledger-actions">
+              <button class="danger" id="subtractButton" type="button">Вычесть из баланса</button>
+              <button class="secondary" id="clearLogButton" type="button">Очистить лог</button>
             </div>
 
-            <div class="empty" id="emptyState">No entries yet. Add a workout to start stacking time.</div>
+            <div class="empty" id="emptyState">Лог пуст. Добавьте первую тренировку.</div>
             <ul class="ledger-list" id="ledgerList"></ul>
           </div>
         </aside>
@@ -406,17 +513,17 @@
       };
 
       const form = document.getElementById("calculator");
-      const addButton = document.getElementById("addButton");
-      const resetButton = document.getElementById("resetButton");
-      const subtractButton = document.getElementById("subtractButton");
-      const clearLogButton = document.getElementById("clearLogButton");
-
       const activityField = document.getElementById("activity");
       const heartRateField = document.getElementById("heartRate");
       const durationField = document.getElementById("duration");
       const bonusField = document.getElementById("bonus");
-      const subtractMinutesField = document.getElementById("subtractMinutes");
       const coefficientNote = document.getElementById("coefficientNote");
+
+      const addButton = document.getElementById("addButton");
+      const resetButton = document.getElementById("resetButton");
+      const subtractButton = document.getElementById("subtractButton");
+      const clearLogButton = document.getElementById("clearLogButton");
+      const subtractMinutesField = document.getElementById("subtractMinutes");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
       const resultSentence = document.getElementById("resultSentence");
@@ -424,8 +531,21 @@
       const ledgerList = document.getElementById("ledgerList");
       const emptyState = document.getElementById("emptyState");
 
+      const screenshotInput = document.getElementById("screenshotInput");
+      const scanButton = document.getElementById("scanButton");
+      const applyDetectedButton = document.getElementById("applyDetectedButton");
+      const ocrStatus = document.getElementById("ocrStatus");
+      const imagePreview = document.getElementById("imagePreview");
+      const detectedHeartRate = document.getElementById("detectedHeartRate");
+      const detectedDuration = document.getElementById("detectedDuration");
+
       let balance = 0;
       let ledger = [];
+      let uploadedImageUrl = "";
+      let detectedValues = {
+        heartRate: null,
+        durationMinutes: null
+      };
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -470,10 +590,10 @@
       }
 
       function getTimestampLabel() {
-        return new Date().toLocaleString("en-US", {
+        return new Date().toLocaleString("ru-RU", {
           month: "short",
           day: "numeric",
-          hour: "numeric",
+          hour: "2-digit",
           minute: "2-digit"
         });
       }
@@ -488,22 +608,21 @@
 
         return {
           activity,
-          coefficient,
           heartRate,
           duration,
           bonus,
+          coefficient,
           totalRounded: Math.round(total)
         };
       }
 
       function updatePreview() {
         const session = calculateSession();
-
         coefficientNote.innerHTML = `${session.activity} coefficient: <strong>${session.coefficient}</strong>`;
         earnedMinutes.textContent = formatMinutes(session.totalRounded);
         resultSentence.textContent =
-          `A ${session.duration}-minute ${session.activity.toLowerCase()} session at ` +
-          `${session.heartRate} bpm earns ${formatMinutes(session.totalRounded)} of gameplay.`;
+          `Активность на ${session.duration} минут при ${session.heartRate} bpm даёт ` +
+          `${formatMinutes(session.totalRounded)} игрового времени.`;
       }
 
       function renderLedger() {
@@ -522,15 +641,15 @@
           item.className = "ledger-item";
 
           const top = document.createElement("div");
-          top.className = "ledger-topline";
+          top.className = "ledger-top";
 
           const title = document.createElement("span");
           title.className = "ledger-title";
           title.textContent = entry.title;
 
-          const amount = document.createElement("span");
-          amount.className = `ledger-amount ${entry.type}`;
-          amount.textContent = `${entry.type === "plus" ? "+" : "-"}${formatMinutes(entry.minutes)}`;
+          const value = document.createElement("span");
+          value.className = `ledger-value ${entry.type}`;
+          value.textContent = `${entry.type === "plus" ? "+" : "-"}${formatMinutes(entry.minutes)}`;
 
           const meta = document.createElement("div");
           meta.className = "ledger-meta";
@@ -540,7 +659,7 @@
           time.className = "ledger-time";
           time.textContent = entry.timestamp;
 
-          top.append(title, amount);
+          top.append(title, value);
           item.append(top, meta, time);
           ledgerList.append(item);
         });
@@ -549,6 +668,120 @@
       function addLedgerEntry(entry) {
         ledger.unshift(entry);
         renderLedger();
+      }
+
+      function setOcrStatus(message, tone) {
+        ocrStatus.textContent = message;
+        ocrStatus.className = `ocr-status${tone ? ` ${tone}` : ""}`;
+      }
+
+      function updateDetectedDisplay() {
+        detectedHeartRate.textContent = detectedValues.heartRate ? `${detectedValues.heartRate} bpm` : "-";
+        detectedDuration.textContent = detectedValues.durationMinutes ? `${detectedValues.durationMinutes} min` : "-";
+      }
+
+      function extractHeartRate(text) {
+        const normalized = text.replace(/\s+/g, " ");
+        const labelledMatch =
+          normalized.match(/avg\.?\s*heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
+          normalized.match(/average\s*heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
+          normalized.match(/heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
+          normalized.match(/ср\.?\s*пульс[^0-9]{0,12}(\d{2,3})/i) ||
+          normalized.match(/пульс[^0-9]{0,12}(\d{2,3})/i);
+
+        if (labelledMatch) {
+          return Number(labelledMatch[1]);
+        }
+
+        const bpmMatch = normalized.match(/(\d{2,3})\s*bpm/i);
+        if (bpmMatch) {
+          return Number(bpmMatch[1]);
+        }
+
+        return null;
+      }
+
+      function extractDurationMinutes(text) {
+        const normalized = text.replace(/\s+/g, " ");
+        const labelledMatch =
+          normalized.match(/time[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          normalized.match(/duration[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          normalized.match(/время[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+
+        if (labelledMatch) {
+          const h = labelledMatch[3] ? Number(labelledMatch[1]) : 0;
+          const m = labelledMatch[3] ? Number(labelledMatch[2]) : Number(labelledMatch[1]);
+          const s = labelledMatch[3] ? Number(labelledMatch[3]) : Number(labelledMatch[2]);
+          return Math.round(h * 60 + m + s / 60);
+        }
+
+        const anyTime = normalized.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+        if (anyTime) {
+          const h = anyTime[3] ? Number(anyTime[1]) : 0;
+          const m = anyTime[3] ? Number(anyTime[2]) : Number(anyTime[1]);
+          const s = anyTime[3] ? Number(anyTime[3]) : Number(anyTime[2]);
+          return Math.round(h * 60 + m + s / 60);
+        }
+
+        const hourMinute =
+          normalized.match(/(\d{1,2})\s*h(?:ours?)?\s*(\d{1,2})?\s*m?/i) ||
+          normalized.match(/(\d{1,2})\s*ч\s*(\d{1,2})?\s*м?/i);
+        if (hourMinute) {
+          return Number(hourMinute[1]) * 60 + Number(hourMinute[2] || 0);
+        }
+
+        const minuteOnly =
+          normalized.match(/(\d{1,3})\s*min/i) ||
+          normalized.match(/(\d{1,3})\s*мин/i);
+        if (minuteOnly) {
+          return Number(minuteOnly[1]);
+        }
+
+        return null;
+      }
+
+      function applyDetectedValues() {
+        if (detectedValues.heartRate !== null) {
+          heartRateField.value = detectedValues.heartRate;
+        }
+
+        if (detectedValues.durationMinutes !== null) {
+          durationField.value = detectedValues.durationMinutes;
+        }
+
+        updatePreview();
+      }
+
+      async function runOcr() {
+        if (!uploadedImageUrl) {
+          setOcrStatus("Сначала загрузите скриншот.", "bad");
+          return;
+        }
+
+        if (!window.Tesseract) {
+          setOcrStatus("Не удалось загрузить модуль распознавания текста.", "bad");
+          return;
+        }
+
+        setOcrStatus("Распознаю текст на скриншоте...", "");
+
+        try {
+          const result = await window.Tesseract.recognize(uploadedImageUrl, "eng+rus");
+          const text = result.data.text || "";
+
+          detectedValues.heartRate = extractHeartRate(text);
+          detectedValues.durationMinutes = extractDurationMinutes(text);
+          updateDetectedDisplay();
+
+          if (detectedValues.heartRate !== null || detectedValues.durationMinutes !== null) {
+            applyDetectedValues();
+            setOcrStatus("Готово. Найденные значения подставлены в конвертер.", "good");
+          } else {
+            setOcrStatus("Не смог уверенно найти пульс и время. Можно ввести их вручную.", "bad");
+          }
+        } catch (error) {
+          setOcrStatus("Ошибка распознавания. Попробуйте другой скриншот.", "bad");
+        }
       }
 
       form.addEventListener("submit", function (event) {
@@ -611,6 +844,37 @@
         updatePreview();
       });
 
+      screenshotInput.addEventListener("change", function (event) {
+        const file = event.target.files && event.target.files[0];
+
+        if (!file) {
+          return;
+        }
+
+        if (uploadedImageUrl) {
+          URL.revokeObjectURL(uploadedImageUrl);
+        }
+
+        uploadedImageUrl = URL.createObjectURL(file);
+        imagePreview.src = uploadedImageUrl;
+        imagePreview.style.display = "block";
+        detectedValues = { heartRate: null, durationMinutes: null };
+        updateDetectedDisplay();
+        setOcrStatus("Скриншот загружен. Нажмите «Распознать».", "");
+      });
+
+      scanButton.addEventListener("click", runOcr);
+      applyDetectedButton.addEventListener("click", function () {
+        applyDetectedValues();
+
+        if (detectedValues.heartRate !== null || detectedValues.durationMinutes !== null) {
+          setOcrStatus("Найденные значения подставлены в поля.", "good");
+        } else {
+          setOcrStatus("Пока нечего подставлять. Сначала распознайте скриншот.", "bad");
+        }
+      });
+
+      updateDetectedDisplay();
       updatePreview();
       renderLedger();
     </script>
