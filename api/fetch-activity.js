@@ -9,6 +9,18 @@ function htmlToText(html) {
     .trim();
 }
 
+function extractTrackDataFromHtml(html) {
+  const bpmMatch = html.match(/"bpm"\s*:\s*(\d{2,3})/i);
+  const pureTimeMatch = html.match(/"pureTime"\s*:\s*"(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})"/i);
+  const typeMatch = html.match(/"type"\s*:\s*"([^"]+)"/i);
+
+  return {
+    bpm: bpmMatch ? Number(bpmMatch[1]) : null,
+    pureTime: pureTimeMatch ? pureTimeMatch[1] : null,
+    type: typeMatch ? typeMatch[1] : null
+  };
+}
+
 function parseTimeToMinutes(match) {
   if (!match) {
     return null;
@@ -78,6 +90,22 @@ function inferActivity(text) {
   return "Running";
 }
 
+function inferActivityFromType(type, fallbackText) {
+  if (/cycle|bike/i.test(type || "")) {
+    return "Cycling";
+  }
+
+  if (/gym|strength/i.test(type || "")) {
+    return "Gym";
+  }
+
+  if (/run/i.test(type || "")) {
+    return "Running";
+  }
+
+  return inferActivity(fallbackText);
+}
+
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.status(405).json({ error: "Method not allowed." });
@@ -120,9 +148,12 @@ export default async function handler(request, response) {
 
     const html = await upstream.text();
     const text = htmlToText(html);
-    const heartRate = extractHeartRate(text);
-    const durationMinutes = extractMovingTime(text);
-    const activity = inferActivity(text);
+    const trackData = extractTrackDataFromHtml(html);
+    const heartRate = trackData.bpm ?? extractHeartRate(text);
+    const durationMinutes = trackData.pureTime
+      ? parseTimeToMinutes(trackData.pureTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/))
+      : extractMovingTime(text);
+    const activity = inferActivityFromType(trackData.type, text);
 
     if (heartRate === null && durationMinutes === null) {
       response.status(422).json({ error: "Could not find heart rate or moving time on the page." });
