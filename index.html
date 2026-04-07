@@ -164,8 +164,7 @@
         margin-top: 1rem;
       }
 
-      button,
-      .upload-label {
+      button {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -179,8 +178,7 @@
         transition: transform 160ms ease;
       }
 
-      button:hover,
-      .upload-label:hover {
+      button:hover {
         transform: translateY(-1px);
       }
 
@@ -189,8 +187,7 @@
         background: linear-gradient(135deg, #c94f18 0%, var(--accent) 52%, var(--accent-soft) 100%);
       }
 
-      .secondary,
-      .upload-label {
+      .secondary {
         background: rgba(255, 255, 255, 0.78);
         border-color: rgba(67, 42, 23, 0.1);
         color: var(--text);
@@ -272,17 +269,6 @@
 
       .ocr-status.bad {
         color: var(--bad);
-      }
-
-      .preview {
-        margin-top: 1rem;
-        display: none;
-        width: 100%;
-        max-height: 340px;
-        object-fit: contain;
-        border-radius: 20px;
-        border: 1px solid rgba(67, 42, 23, 0.08);
-        background: rgba(255, 255, 255, 0.82);
       }
 
       .ocr-result {
@@ -367,10 +353,6 @@
       }
 
       .control-panel[hidden] {
-        display: none;
-      }
-
-      .hidden-input {
         display: none;
       }
 
