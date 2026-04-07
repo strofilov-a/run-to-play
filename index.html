@@ -68,14 +68,6 @@
         letter-spacing: -0.06em;
       }
 
-      .hero p {
-        max-width: 58ch;
-        margin: 1rem 0 0;
-        color: var(--muted);
-        font-size: clamp(1rem, 2vw, 1.15rem);
-        line-height: 1.6;
-      }
-
       .layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
@@ -319,12 +311,6 @@
       <section class="hero">
         <span class="eyebrow">Run To Play</span>
         <h1>Turn exercise into game minutes.</h1>
-        <p>
-          Track running, cycling, and gym sessions. Running uses a coefficient of
-          <strong>170</strong>, cycling uses <strong>350</strong>, and gym uses
-          <strong>250</strong>. Earned time stacks in a balance, and you can spend
-          it with entries like <strong>1h20m</strong>.
-        </p>
       </section>
 
       <section class="layout">
@@ -382,7 +368,7 @@
         <aside class="card sidebar">
           <div class="summary-box">
             <p class="kicker">Available balance</p>
-            <h2 class="big-number" id="balanceMinutes">0 min</h2>
+            <h2 class="big-number" id="balanceMinutes">0m</h2>
             <p class="summary-copy">Stack earned time, then subtract minutes when gameplay gets used.</p>
           </div>
 
@@ -396,8 +382,8 @@
 
             <div class="field" style="margin-top: 1rem;">
               <label for="subtractMinutes">Subtract used minutes</label>
-                <input id="subtractMinutes" type="text" value="15m" />
-                <span class="hint">Use values like 45m, 1h, or 1h20m.</span>
+              <input id="subtractMinutes" type="text" value="15m" />
+              <span class="hint">Use values like 45m, 1h, or 1h20m.</span>
             </div>
 
             <div class="ledger-actions" style="margin-top: 1rem;">
@@ -415,7 +401,7 @@
     <script>
       const COEFFICIENTS = {
         Running: 170,
-        Cycling: 350,
+        Cycling: 230,
         Gym: 250
       };
 
@@ -440,12 +426,6 @@
 
       let balance = 0;
       let ledger = [];
-
-      function formatWhole(value) {
-        return new Intl.NumberFormat("en-US", {
-          maximumFractionDigits: 0
-        }).format(Math.round(value));
-      }
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -487,6 +467,15 @@
         }
 
         return total;
+      }
+
+      function getTimestampLabel() {
+        return new Date().toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit"
+        });
       }
 
       function calculateSession() {
@@ -560,15 +549,6 @@
       function addLedgerEntry(entry) {
         ledger.unshift(entry);
         renderLedger();
-      }
-
-      function getTimestampLabel() {
-        return new Date().toLocaleString("en-US", {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit"
-        });
       }
 
       form.addEventListener("submit", function (event) {
