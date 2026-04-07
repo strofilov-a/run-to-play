@@ -413,8 +413,8 @@
 
               <div class="field">
                 <label for="duration">Время активности</label>
-                <input id="duration" name="duration" type="number" min="0" value="0" />
-                <span class="hint">Минуты.</span>
+                <input id="duration" name="duration" type="text" value="0" />
+                <span class="hint">Можно писать `90`, `1h`, `1h 30m`.</span>
               </div>
 
               <div class="field full">
@@ -495,7 +495,7 @@
             <p class="kicker">Списать минуты</p>
             <div class="field" style="margin-top: 0.9rem;">
               <label for="subtractMinutes">Сколько потратили</label>
-              <input id="subtractMinutes" type="text" value="15m" />
+              <input id="subtractMinutes" type="text" value="0" />
               <span class="hint">Можно писать `45m`, `1h`, `1h20m`.</span>
             </div>
 
@@ -605,7 +605,7 @@
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
-        const duration = Number(durationField.value) || 0;
+        const duration = Math.max(parseMinutesInput(durationField.value), 0);
         const bonus = Math.max(Number(bonusField.value) || 0, 0);
         const coefficient = COEFFICIENTS[activity];
         const total = Math.max((heartRate * duration) / coefficient + bonus, 0);
@@ -690,7 +690,7 @@
         }
 
         if (detectedValues.durationMinutes !== null) {
-          durationField.value = detectedValues.durationMinutes;
+          durationField.value = formatMinutes(detectedValues.durationMinutes);
         }
 
         updatePreview();
@@ -787,7 +787,7 @@
         heartRateField.value = "0";
         durationField.value = "0";
         bonusField.value = "0";
-        subtractMinutesField.value = "15m";
+        subtractMinutesField.value = "0";
         updatePreview();
       });
 
