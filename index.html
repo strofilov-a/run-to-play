@@ -547,6 +547,31 @@
         durationMinutes: null
       };
 
+      function loadImageElement(source) {
+        return new Promise(function (resolve, reject) {
+          const image = new Image();
+          image.onload = function () {
+            resolve(image);
+          };
+          image.onerror = reject;
+          image.src = source;
+        });
+      }
+
+      function cropImageRegion(image, region) {
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        const sx = Math.round(image.width * region.x);
+        const sy = Math.round(image.height * region.y);
+        const sw = Math.round(image.width * region.width);
+        const sh = Math.round(image.height * region.height);
+
+        canvas.width = sw;
+        canvas.height = sh;
+        context.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+        return canvas.toDataURL("image/png");
+      }
+
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
         const hours = Math.floor(rounded / 60);
@@ -701,6 +726,24 @@
         return null;
       }
 
+      function extractHeartRateFromRegion(text) {
+        const normalized = text.replace(/\s+/g, " ");
+        const bpmMatch = normalized.match(/(\d{2,3})\s*bpm/i);
+        if (bpmMatch) {
+          return Number(bpmMatch[1]);
+        }
+
+        const numbers = Array.from(normalized.matchAll(/\b(\d{2,3})\b/g))
+          .map(function (match) {
+            return Number(match[1]);
+          })
+          .filter(function (value) {
+            return value >= 60 && value <= 220;
+          });
+
+        return numbers.length ? numbers[0] : null;
+      }
+
       function parseCapturedTimeToMinutes(match) {
         if (!match) {
           return null;
@@ -781,6 +824,22 @@
         return null;
       }
 
+      function extractMovingTimeFromRegion(text) {
+        const normalized = text.replace(/\s+/g, " ");
+
+        const labelled =
+          normalized.match(/чист[ао]е\s*время[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          normalized.match(/moving\s*time[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+
+        const labelledMinutes = parseCapturedTimeToMinutes(labelled);
+        if (labelledMinutes !== null) {
+          return labelledMinutes;
+        }
+
+        const anyTime = normalized.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+        return parseCapturedTimeToMinutes(anyTime);
+      }
+
       function applyDetectedValues() {
         if (detectedValues.heartRate !== null) {
           heartRateField.value = detectedValues.heartRate;
@@ -804,19 +863,46 @@
           return;
         }
 
-        setOcrStatus("Распознаю текст на скриншоте...", "");
+        setOcrStatus("Распознаю скриншот и отдельно ищу пульс и чистое время...", "");
 
         try {
-          const result = await window.Tesseract.recognize(uploadedImageUrl, "eng+rus");
-          const text = result.data.text || "";
+          const image = await loadImageElement(uploadedImageUrl);
+          const heartRateRegion = cropImageRegion(image, {
+            x: 0.0,
+            y: 0.16,
+            width: 0.33,
+            height: 0.5
+          });
+          const movingTimeRegion = cropImageRegion(image, {
+            x: 0.74,
+            y: 0.0,
+            width: 0.24,
+            height: 0.18
+          });
 
-          detectedValues.heartRate = extractHeartRate(text);
-          detectedValues.durationMinutes = extractDurationMinutes(text);
+          const [fullResult, heartRateResult, movingTimeResult] = await Promise.all([
+            window.Tesseract.recognize(uploadedImageUrl, "eng+rus"),
+            window.Tesseract.recognize(heartRateRegion, "eng"),
+            window.Tesseract.recognize(movingTimeRegion, "eng+rus")
+          ]);
+
+          const fullText = fullResult.data.text || "";
+          const heartRateText = heartRateResult.data.text || "";
+          const movingTimeText = movingTimeResult.data.text || "";
+
+          detectedValues.heartRate =
+            extractHeartRateFromRegion(heartRateText) ||
+            extractHeartRate(fullText);
+
+          detectedValues.durationMinutes =
+            extractMovingTimeFromRegion(movingTimeText) ||
+            extractDurationMinutes(fullText);
+
           updateDetectedDisplay();
 
           if (detectedValues.heartRate !== null || detectedValues.durationMinutes !== null) {
             applyDetectedValues();
-            setOcrStatus("Готово. Найденные значения подставлены в конвертер.", "good");
+            setOcrStatus("Готово. Пульс искал слева, а чистое время брал из верхнего правого блока.", "good");
           } else {
             setOcrStatus("Не смог уверенно найти пульс и время. Можно ввести их вручную.", "bad");
           }
