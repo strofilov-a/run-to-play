@@ -378,7 +378,6 @@
         }
       }
     </style>
-    <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   </head>
   <body>
     <main class="page">
@@ -386,8 +385,8 @@
         <span class="eyebrow">Run to Play</span>
         <h1>Активность в минуты игры.</h1>
         <p class="subhead">
-          Загрузи скриншот из Strava, попробуй автоматически вытащить пульс и время,
-          а затем прибавь заработанные минуты в баланс ребёнка.
+          Вставь ссылку на активность, и сайт попробует автоматически вытащить
+          пульс и чистое время, а затем подставит их в конвертер.
         </p>
       </section>
 
@@ -447,23 +446,30 @@
           <div class="ocr-box">
             <div class="ocr-header">
               <div>
-                <h3 class="section-title" style="margin-bottom: 0.25rem;">Скриншот Strava</h3>
-                <div class="hint">Загрузи скрин, и сайт попробует сам вставить пульс и время.</div>
+                <h3 class="section-title" style="margin-bottom: 0.25rem;">Ссылка на активность</h3>
+                <div class="hint">Лучше всего работает с публичными ссылками вида `s10.run/activity?...`.</div>
               </div>
             </div>
 
+            <div class="field full" style="margin-top: 1rem;">
+              <label for="activityUrl">Ссылка</label>
+              <input
+                id="activityUrl"
+                type="url"
+                placeholder="https://s10.run/activity?aid=..."
+                value=""
+              />
+              <span class="hint">Например `https://s10.run/activity?aid=g22405164005`.</span>
+            </div>
+
             <div class="actions">
-              <label class="upload-label" for="screenshotInput">Загрузить скриншот</label>
-              <input class="hidden-input" id="screenshotInput" type="file" accept="image/*" />
-              <button class="secondary" id="scanButton" type="button">Распознать</button>
+              <button class="primary" id="fetchLinkButton" type="button">Заполнить из ссылки</button>
               <button class="secondary" id="applyDetectedButton" type="button">Подставить найденное</button>
             </div>
 
             <div class="ocr-status" id="ocrStatus">
-              Пока ничего не загружено.
+              Пока ссылка не загружена.
             </div>
-
-            <img class="preview" id="imagePreview" alt="Предпросмотр загруженного скриншота" />
 
             <div class="ocr-result">
               <div class="ocr-stat">
@@ -531,46 +537,19 @@
       const ledgerList = document.getElementById("ledgerList");
       const emptyState = document.getElementById("emptyState");
 
-      const screenshotInput = document.getElementById("screenshotInput");
-      const scanButton = document.getElementById("scanButton");
+      const activityUrlField = document.getElementById("activityUrl");
+      const fetchLinkButton = document.getElementById("fetchLinkButton");
       const applyDetectedButton = document.getElementById("applyDetectedButton");
       const ocrStatus = document.getElementById("ocrStatus");
-      const imagePreview = document.getElementById("imagePreview");
       const detectedHeartRate = document.getElementById("detectedHeartRate");
       const detectedDuration = document.getElementById("detectedDuration");
 
       let balance = 0;
       let ledger = [];
-      let uploadedImageUrl = "";
       let detectedValues = {
         heartRate: null,
         durationMinutes: null
       };
-
-      function loadImageElement(source) {
-        return new Promise(function (resolve, reject) {
-          const image = new Image();
-          image.onload = function () {
-            resolve(image);
-          };
-          image.onerror = reject;
-          image.src = source;
-        });
-      }
-
-      function cropImageRegion(image, region) {
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        const sx = Math.round(image.width * region.x);
-        const sy = Math.round(image.height * region.y);
-        const sw = Math.round(image.width * region.width);
-        const sh = Math.round(image.height * region.height);
-
-        canvas.width = sw;
-        canvas.height = sh;
-        context.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
-        return canvas.toDataURL("image/png");
-      }
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -705,141 +684,6 @@
         detectedDuration.textContent = detectedValues.durationMinutes ? formatMinutes(detectedValues.durationMinutes) : "-";
       }
 
-      function extractHeartRate(text) {
-        const normalized = text.replace(/\s+/g, " ");
-        const labelledMatch =
-          normalized.match(/avg\.?\s*heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
-          normalized.match(/average\s*heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
-          normalized.match(/heart\s*rate[^0-9]{0,12}(\d{2,3})/i) ||
-          normalized.match(/ср\.?\s*пульс[^0-9]{0,12}(\d{2,3})/i) ||
-          normalized.match(/пульс[^0-9]{0,12}(\d{2,3})/i);
-
-        if (labelledMatch) {
-          return Number(labelledMatch[1]);
-        }
-
-        const bpmMatch = normalized.match(/(\d{2,3})\s*bpm/i);
-        if (bpmMatch) {
-          return Number(bpmMatch[1]);
-        }
-
-        return null;
-      }
-
-      function extractHeartRateFromRegion(text) {
-        const normalized = text.replace(/\s+/g, " ");
-        const bpmMatch = normalized.match(/(\d{2,3})\s*bpm/i);
-        if (bpmMatch) {
-          return Number(bpmMatch[1]);
-        }
-
-        const numbers = Array.from(normalized.matchAll(/\b(\d{2,3})\b/g))
-          .map(function (match) {
-            return Number(match[1]);
-          })
-          .filter(function (value) {
-            return value >= 60 && value <= 220;
-          });
-
-        return numbers.length ? numbers[0] : null;
-      }
-
-      function parseCapturedTimeToMinutes(match) {
-        if (!match) {
-          return null;
-        }
-
-        const h = match[3] ? Number(match[1]) : 0;
-        const m = match[3] ? Number(match[2]) : Number(match[1]);
-        const s = match[3] ? Number(match[3]) : Number(match[2]);
-        return Math.round(h * 60 + m + s / 60);
-      }
-
-      function extractDurationMinutes(text) {
-        const normalized = text.replace(/\r/g, "");
-        const collapsed = normalized.replace(/\s+/g, " ");
-        const lines = normalized
-          .split("\n")
-          .map(function (line) {
-            return line.trim();
-          })
-          .filter(Boolean);
-
-        const directMovingTime =
-          collapsed.match(/moving\s*time[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          collapsed.match(/чист[ао]е\s*время[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
-
-        const directMovingMinutes = parseCapturedTimeToMinutes(directMovingTime);
-        if (directMovingMinutes !== null) {
-          return directMovingMinutes;
-        }
-
-        for (let index = 0; index < lines.length; index += 1) {
-          const line = lines[index];
-          const nextLine = lines[index + 1] || "";
-          const combined = `${line} ${nextLine}`.trim();
-
-          if (/moving\s*time/i.test(line) || /чист[ао]е\s*время/i.test(line)) {
-            const nearbyTime =
-              combined.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) ||
-              nextLine.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-
-            const nearbyMinutes = parseCapturedTimeToMinutes(nearbyTime);
-            if (nearbyMinutes !== null) {
-              return nearbyMinutes;
-            }
-          }
-        }
-
-        const labelledFallback =
-          collapsed.match(/duration[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          collapsed.match(/time[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          collapsed.match(/время[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
-
-        const labelledFallbackMinutes = parseCapturedTimeToMinutes(labelledFallback);
-        if (labelledFallbackMinutes !== null) {
-          return labelledFallbackMinutes;
-        }
-
-        const anyTime = collapsed.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
-        const anyTimeMinutes = parseCapturedTimeToMinutes(anyTime);
-        if (anyTimeMinutes !== null) {
-          return anyTimeMinutes;
-        }
-
-        const hourMinute =
-          collapsed.match(/(\d{1,2})\s*h(?:ours?)?\s*(\d{1,2})?\s*m?/i) ||
-          collapsed.match(/(\d{1,2})\s*ч\s*(\d{1,2})?\s*м?/i);
-        if (hourMinute) {
-          return Number(hourMinute[1]) * 60 + Number(hourMinute[2] || 0);
-        }
-
-        const minuteOnly =
-          collapsed.match(/(\d{1,3})\s*min/i) ||
-          collapsed.match(/(\d{1,3})\s*мин/i);
-        if (minuteOnly) {
-          return Number(minuteOnly[1]);
-        }
-
-        return null;
-      }
-
-      function extractMovingTimeFromRegion(text) {
-        const normalized = text.replace(/\s+/g, " ");
-
-        const labelled =
-          normalized.match(/чист[ао]е\s*время[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          normalized.match(/moving\s*time[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
-
-        const labelledMinutes = parseCapturedTimeToMinutes(labelled);
-        if (labelledMinutes !== null) {
-          return labelledMinutes;
-        }
-
-        const anyTime = normalized.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
-        return parseCapturedTimeToMinutes(anyTime);
-      }
-
       function applyDetectedValues() {
         if (detectedValues.heartRate !== null) {
           heartRateField.value = detectedValues.heartRate;
@@ -852,62 +696,38 @@
         updatePreview();
       }
 
-      async function runOcr() {
-        if (!uploadedImageUrl) {
-          setOcrStatus("Сначала загрузите скриншот.", "bad");
+      async function fetchActivityFromLink() {
+        const url = activityUrlField.value.trim();
+
+        if (!url) {
+          setOcrStatus("Сначала вставьте ссылку на активность.", "bad");
           return;
         }
 
-        if (!window.Tesseract) {
-          setOcrStatus("Не удалось загрузить модуль распознавания текста.", "bad");
-          return;
-        }
-
-        setOcrStatus("Распознаю скриншот и отдельно ищу пульс и чистое время...", "");
+        setOcrStatus("Загружаю страницу активности и ищу пульс с чистым временем...", "");
 
         try {
-          const image = await loadImageElement(uploadedImageUrl);
-          const heartRateRegion = cropImageRegion(image, {
-            x: 0.0,
-            y: 0.16,
-            width: 0.33,
-            height: 0.5
-          });
-          const movingTimeRegion = cropImageRegion(image, {
-            x: 0.74,
-            y: 0.0,
-            width: 0.24,
-            height: 0.18
-          });
+          const response = await fetch(`/api/fetch-activity?url=${encodeURIComponent(url)}`);
+          const payload = await response.json();
 
-          const [fullResult, heartRateResult, movingTimeResult] = await Promise.all([
-            window.Tesseract.recognize(uploadedImageUrl, "eng+rus"),
-            window.Tesseract.recognize(heartRateRegion, "eng"),
-            window.Tesseract.recognize(movingTimeRegion, "eng+rus")
-          ]);
-
-          const fullText = fullResult.data.text || "";
-          const heartRateText = heartRateResult.data.text || "";
-          const movingTimeText = movingTimeResult.data.text || "";
-
-          detectedValues.heartRate =
-            extractHeartRateFromRegion(heartRateText) ||
-            extractHeartRate(fullText);
-
-          detectedValues.durationMinutes =
-            extractMovingTimeFromRegion(movingTimeText) ||
-            extractDurationMinutes(fullText);
-
-          updateDetectedDisplay();
-
-          if (detectedValues.heartRate !== null || detectedValues.durationMinutes !== null) {
-            applyDetectedValues();
-            setOcrStatus("Готово. Пульс искал слева, а чистое время брал из верхнего правого блока.", "good");
-          } else {
-            setOcrStatus("Не смог уверенно найти пульс и время. Можно ввести их вручную.", "bad");
+          if (!response.ok) {
+            throw new Error(payload.error || "Не удалось загрузить активность.");
           }
+
+          detectedValues.heartRate = payload.heartRate;
+          detectedValues.durationMinutes = payload.durationMinutes;
+          updateDetectedDisplay();
+          applyDetectedValues();
+
+          if (payload.activity && COEFFICIENTS[payload.activity]) {
+            activityField.value = payload.activity;
+          }
+
+          updatePreview();
+          setOcrStatus("Готово. Значения получены из ссылки и подставлены в конвертер.", "good");
         } catch (error) {
-          setOcrStatus("Ошибка распознавания. Попробуйте другой скриншот.", "bad");
+          setOcrStatus(error.message || "Не удалось разобрать ссылку активности.", "bad");
+          return;
         }
       }
 
@@ -971,26 +791,7 @@
         updatePreview();
       });
 
-      screenshotInput.addEventListener("change", function (event) {
-        const file = event.target.files && event.target.files[0];
-
-        if (!file) {
-          return;
-        }
-
-        if (uploadedImageUrl) {
-          URL.revokeObjectURL(uploadedImageUrl);
-        }
-
-        uploadedImageUrl = URL.createObjectURL(file);
-        imagePreview.src = uploadedImageUrl;
-        imagePreview.style.display = "block";
-        detectedValues = { heartRate: null, durationMinutes: null };
-        updateDetectedDisplay();
-        setOcrStatus("Скриншот загружен. Нажмите «Распознать».", "");
-      });
-
-      scanButton.addEventListener("click", runOcr);
+      fetchLinkButton.addEventListener("click", fetchActivityFromLink);
       applyDetectedButton.addEventListener("click", function () {
         applyDetectedValues();
 
