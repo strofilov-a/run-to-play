@@ -701,38 +701,79 @@
         return null;
       }
 
-      function extractDurationMinutes(text) {
-        const normalized = text.replace(/\s+/g, " ");
-        const labelledMatch =
-          normalized.match(/time[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          normalized.match(/duration[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
-          normalized.match(/время[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
-
-        if (labelledMatch) {
-          const h = labelledMatch[3] ? Number(labelledMatch[1]) : 0;
-          const m = labelledMatch[3] ? Number(labelledMatch[2]) : Number(labelledMatch[1]);
-          const s = labelledMatch[3] ? Number(labelledMatch[3]) : Number(labelledMatch[2]);
-          return Math.round(h * 60 + m + s / 60);
+      function parseCapturedTimeToMinutes(match) {
+        if (!match) {
+          return null;
         }
 
-        const anyTime = normalized.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
-        if (anyTime) {
-          const h = anyTime[3] ? Number(anyTime[1]) : 0;
-          const m = anyTime[3] ? Number(anyTime[2]) : Number(anyTime[1]);
-          const s = anyTime[3] ? Number(anyTime[3]) : Number(anyTime[2]);
-          return Math.round(h * 60 + m + s / 60);
+        const h = match[3] ? Number(match[1]) : 0;
+        const m = match[3] ? Number(match[2]) : Number(match[1]);
+        const s = match[3] ? Number(match[3]) : Number(match[2]);
+        return Math.round(h * 60 + m + s / 60);
+      }
+
+      function extractDurationMinutes(text) {
+        const normalized = text.replace(/\r/g, "");
+        const collapsed = normalized.replace(/\s+/g, " ");
+        const lines = normalized
+          .split("\n")
+          .map(function (line) {
+            return line.trim();
+          })
+          .filter(Boolean);
+
+        const directMovingTime =
+          collapsed.match(/moving\s*time[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          collapsed.match(/чист[ао]е\s*время[^0-9]{0,20}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+
+        const directMovingMinutes = parseCapturedTimeToMinutes(directMovingTime);
+        if (directMovingMinutes !== null) {
+          return directMovingMinutes;
+        }
+
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          const nextLine = lines[index + 1] || "";
+          const combined = `${line} ${nextLine}`.trim();
+
+          if (/moving\s*time/i.test(line) || /чист[ао]е\s*время/i.test(line)) {
+            const nearbyTime =
+              combined.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) ||
+              nextLine.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+
+            const nearbyMinutes = parseCapturedTimeToMinutes(nearbyTime);
+            if (nearbyMinutes !== null) {
+              return nearbyMinutes;
+            }
+          }
+        }
+
+        const labelledFallback =
+          collapsed.match(/duration[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          collapsed.match(/time[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i) ||
+          collapsed.match(/время[^0-9]{0,12}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+
+        const labelledFallbackMinutes = parseCapturedTimeToMinutes(labelledFallback);
+        if (labelledFallbackMinutes !== null) {
+          return labelledFallbackMinutes;
+        }
+
+        const anyTime = collapsed.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+        const anyTimeMinutes = parseCapturedTimeToMinutes(anyTime);
+        if (anyTimeMinutes !== null) {
+          return anyTimeMinutes;
         }
 
         const hourMinute =
-          normalized.match(/(\d{1,2})\s*h(?:ours?)?\s*(\d{1,2})?\s*m?/i) ||
-          normalized.match(/(\d{1,2})\s*ч\s*(\d{1,2})?\s*м?/i);
+          collapsed.match(/(\d{1,2})\s*h(?:ours?)?\s*(\d{1,2})?\s*m?/i) ||
+          collapsed.match(/(\d{1,2})\s*ч\s*(\d{1,2})?\s*м?/i);
         if (hourMinute) {
           return Number(hourMinute[1]) * 60 + Number(hourMinute[2] || 0);
         }
 
         const minuteOnly =
-          normalized.match(/(\d{1,3})\s*min/i) ||
-          normalized.match(/(\d{1,3})\s*мин/i);
+          collapsed.match(/(\d{1,3})\s*min/i) ||
+          collapsed.match(/(\d{1,3})\s*мин/i);
         if (minuteOnly) {
           return Number(minuteOnly[1]);
         }
