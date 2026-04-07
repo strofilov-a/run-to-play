@@ -702,7 +702,7 @@
 
       function updateDetectedDisplay() {
         detectedHeartRate.textContent = detectedValues.heartRate ? `${detectedValues.heartRate} bpm` : "-";
-        detectedDuration.textContent = detectedValues.durationMinutes ? `${detectedValues.durationMinutes} min` : "-";
+        detectedDuration.textContent = detectedValues.durationMinutes ? formatMinutes(detectedValues.durationMinutes) : "-";
       }
 
       function extractHeartRate(text) {
