@@ -502,8 +502,8 @@
 
                   <div class="field">
                     <label for="heartRate">Средний пульс</label>
-                    <input id="heartRate" name="heartRate" type="number" min="0" value="0" />
-                    <span class="hint">Удары в минуту.</span>
+                    <input id="heartRate" name="heartRate" type="number" min="0" value="0" disabled />
+                    <span class="hint" id="heartRateHint">Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.</span>
                   </div>
 
                   <div class="field">
@@ -591,6 +591,7 @@
       const controlHint = document.getElementById("controlHint");
       const activityField = document.getElementById("activity");
       const heartRateField = document.getElementById("heartRate");
+      const heartRateHint = document.getElementById("heartRateHint");
       const durationField = document.getElementById("duration");
       const bonusField = document.getElementById("bonus");
       const coefficientNote = document.getElementById("coefficientNote");
@@ -740,6 +741,14 @@
         resultSentence.textContent =
           `Активность на ${session.duration} минут при ${session.heartRate} bpm даёт ` +
           `${formatMinutes(session.totalRounded)} игрового времени.`;
+      }
+
+      function setControlCenterState(isOpen) {
+        controlPanel.hidden = !isOpen;
+        heartRateField.disabled = !isOpen;
+        heartRateHint.textContent = isOpen
+          ? "Control Center открыт: найденный пульс можно редактировать вручную."
+          : "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
       }
 
       function renderLedger() {
@@ -916,26 +925,27 @@
 
       unlockButton.addEventListener("click", function () {
         if (controlCodeField.value === CONTROL_CODE) {
-          controlPanel.hidden = false;
+          setControlCenterState(true);
           controlHint.textContent = "Control Center открыт. Можно вручную менять значения и коэффициенты.";
           setOcrStatus("Control Center открыт.", "good");
           controlCodeField.value = "";
           return;
         }
 
-        controlPanel.hidden = true;
+        setControlCenterState(false);
         controlHint.textContent = "Неверный код. Для ребёнка режим по ссылке остаётся доступным.";
         controlCodeField.value = "";
       });
 
       closeControlButton.addEventListener("click", function () {
-        controlPanel.hidden = true;
+        setControlCenterState(false);
         controlHint.textContent = "Control Center закрыт. Ручной ввод снова скрыт.";
       });
 
       fetchLinkButton.addEventListener("click", fetchActivityFromLink);
 
       loadCoefficients();
+      setControlCenterState(false);
       updateDetectedDisplay();
       updatePreview();
       renderLedger();
