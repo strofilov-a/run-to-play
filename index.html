@@ -705,6 +705,7 @@
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
       let currentUser = null;
+      let lastRemoteEntryCount = 0;
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -822,7 +823,9 @@
       }
 
       function setAuthStatus(message, tone) {
-        authStatus.textContent = message;
+        const localCount = Array.isArray(ledger) ? ledger.length : 0;
+        const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
+        authStatus.textContent = `${message}${cloudPart}`;
         authStatus.className = `auth-status${tone ? ` ${tone}` : ""}`;
       }
 
@@ -837,15 +840,18 @@
           coefficients: getCurrentCoefficients()
         };
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("family_state")
-          .upsert(payload);
+          .upsert(payload, { onConflict: "user_id" })
+          .select("ledger")
+          .single();
 
         if (error) {
           setAuthStatus("Вход выполнен, но не удалось сохранить данные в облако. Проверь SQL в Supabase.", "bad");
           return;
         }
 
+        lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : ledger.length;
         setAuthStatus(`Данные семьи сохранены в облаке для ${currentUser.email}.`, "good");
       }
 
@@ -867,9 +873,11 @@
 
         const hasLocalLedger = Array.isArray(ledger) && ledger.length > 0;
         const hasRemoteLedger = Array.isArray(data?.ledger) && data.ledger.length > 0;
+        lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : 0;
 
         if (!data) {
           await persistState();
+          lastRemoteEntryCount = Array.isArray(ledger) ? ledger.length : 0;
           setAuthStatus(`Вы вошли как ${currentUser.email}. Создано новое облачное хранилище семьи.`, "good");
           return;
         }
@@ -1239,6 +1247,7 @@
         }
 
         await persistState();
+        await loadRemoteState();
       });
 
       const {
@@ -1250,6 +1259,7 @@
         authEmailField.value = session.user.email || "";
         await loadRemoteState();
       } else {
+        lastRemoteEntryCount = 0;
         setAuthStatus("Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.", "");
       }
 
