@@ -919,11 +919,13 @@
           controlPanel.hidden = false;
           controlHint.textContent = "Control Center открыт. Можно вручную менять значения и коэффициенты.";
           setOcrStatus("Control Center открыт.", "good");
+          controlCodeField.value = "";
           return;
         }
 
         controlPanel.hidden = true;
         controlHint.textContent = "Неверный код. Для ребёнка режим по ссылке остаётся доступным.";
+        controlCodeField.value = "";
       });
 
       closeControlButton.addEventListener("click", function () {
