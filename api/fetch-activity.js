@@ -11,12 +11,14 @@ function htmlToText(html) {
 
 function extractTrackDataFromHtml(html) {
   const bpmMatch = html.match(/"bpm"\s*:\s*(\d{2,3})/i);
-  const pureTimeMatch = html.match(/"pureTime"\s*:\s*"(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})"/i);
+  const cleanTimeMatch =
+    html.match(/"clean_time"\s*:\s*"(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})"/i) ||
+    html.match(/"pureTime"\s*:\s*"(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})"/i);
   const typeMatch = html.match(/"type"\s*:\s*"([^"]+)"/i);
 
   return {
     bpm: bpmMatch ? Number(bpmMatch[1]) : null,
-    pureTime: pureTimeMatch ? pureTimeMatch[1] : null,
+    cleanTime: cleanTimeMatch ? cleanTimeMatch[1] : null,
     type: typeMatch ? typeMatch[1] : null
   };
 }
@@ -150,8 +152,8 @@ export default async function handler(request, response) {
     const text = htmlToText(html);
     const trackData = extractTrackDataFromHtml(html);
     const heartRate = trackData.bpm ?? extractHeartRate(text);
-    const durationMinutes = trackData.pureTime
-      ? parseTimeToMinutes(trackData.pureTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/))
+    const durationMinutes = trackData.cleanTime
+      ? parseTimeToMinutes(trackData.cleanTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/))
       : extractMovingTime(text);
     const activity = inferActivityFromType(trackData.type, text);
 
