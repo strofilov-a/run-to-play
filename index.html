@@ -336,6 +336,32 @@
         color: var(--bad);
       }
 
+      button[disabled] {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      .is-loading::after {
+        content: "";
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        display: inline-block;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
       .control-panel {
         margin-top: 1rem;
       }
@@ -421,6 +447,18 @@
         font-weight: 700;
       }
 
+      .ledger-delete {
+        margin-top: 0.4rem;
+        width: fit-content;
+        padding: 0.55rem 0.85rem;
+        border-radius: 999px;
+        border: 1px solid rgba(183, 70, 45, 0.16);
+        background: rgba(255, 255, 255, 0.78);
+        color: var(--bad);
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
       .empty {
         margin-top: 1rem;
         padding: 1rem;
@@ -471,9 +509,8 @@
 
           <div class="actions">
             <button class="primary" id="signUpButton" type="button">Sign Up</button>
-            <button class="secondary" id="logInButton" type="button">Log In</button>
+            <button class="success" id="logInButton" type="button">Log In</button>
             <button class="secondary" id="logOutButton" type="button">Log Out</button>
-            <button class="secondary" id="syncNowButton" type="button">Sync now</button>
           </div>
 
           <div class="auth-status" id="authStatus">
@@ -681,7 +718,6 @@
       const signUpButton = document.getElementById("signUpButton");
       const logInButton = document.getElementById("logInButton");
       const logOutButton = document.getElementById("logOutButton");
-      const syncNowButton = document.getElementById("syncNowButton");
       const authStatus = document.getElementById("authStatus");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
@@ -706,6 +742,7 @@
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
       let currentUser = null;
       let lastRemoteEntryCount = 0;
+      let controlCenterOpen = false;
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -827,6 +864,20 @@
         const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
         authStatus.textContent = `${message}${cloudPart}`;
         authStatus.className = `auth-status${tone ? ` ${tone}` : ""}`;
+      }
+
+      async function withButtonLoading(button, action) {
+        button.disabled = true;
+        button.classList.add("is-loading");
+
+        try {
+          return await action();
+        } finally {
+          setTimeout(function () {
+            button.disabled = false;
+            button.classList.remove("is-loading");
+          }, 450);
+        }
       }
 
       async function persistState() {
@@ -954,11 +1005,13 @@
       }
 
       function setControlCenterState(isOpen) {
+        controlCenterOpen = isOpen;
         controlPanel.hidden = !isOpen;
         heartRateField.disabled = !isOpen;
         heartRateHint.textContent = isOpen
           ? "Control Center открыт: найденный пульс можно редактировать вручную."
           : "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
+        renderLedger();
       }
 
       function renderLedger() {
@@ -1019,7 +1072,25 @@
             time.textContent = entry.timestamp;
 
             top.append(title, value);
-            item.append(top, meta, time);
+
+            if (controlCenterOpen) {
+              const deleteButton = document.createElement("button");
+              deleteButton.type = "button";
+              deleteButton.className = "ledger-delete";
+              deleteButton.textContent = "Удалить запись";
+              deleteButton.addEventListener("click", function () {
+                ledger = ledger.filter(function (candidate) {
+                  return candidate.createdAt !== entry.createdAt;
+                });
+                saveLedger();
+                renderLedger();
+                setOcrStatus("Запись удалена. Изменения синхронизируются автоматически.", "good");
+              });
+              item.append(top, meta, time, deleteButton);
+            } else {
+              item.append(top, meta, time);
+            }
+
             dayList.append(item);
           });
 
@@ -1047,6 +1118,8 @@
           timestamp: `Added ${getTimestampLabel()}`,
           createdAt: new Date().toISOString()
         });
+
+        setOcrStatus("Запись добавлена. Изменения синхронизируются автоматически.", "good");
       }
 
       function setOcrStatus(message, tone) {
@@ -1123,25 +1196,38 @@
         field.addEventListener("change", saveCoefficients);
       });
 
-      addButton.addEventListener("click", addCurrentSessionToLog);
-      quickAddButton.addEventListener("click", addCurrentSessionToLog);
+      addButton.addEventListener("click", function () {
+        withButtonLoading(addButton, async function () {
+          addCurrentSessionToLog();
+        });
+      });
+
+      quickAddButton.addEventListener("click", function () {
+        withButtonLoading(quickAddButton, async function () {
+          addCurrentSessionToLog();
+        });
+      });
 
       subtractButton.addEventListener("click", function () {
-        const subtractMinutes = Math.max(parseMinutesInput(subtractMinutesField.value), 0);
+        withButtonLoading(subtractButton, async function () {
+          const subtractMinutes = Math.max(parseMinutesInput(subtractMinutesField.value), 0);
 
-        if (!subtractMinutes) {
-          return;
-        }
+          if (!subtractMinutes) {
+            return;
+          }
 
-        const spent = Math.min(balance, Math.round(subtractMinutes));
+          const spent = Math.min(balance, Math.round(subtractMinutes));
 
-        addLedgerEntry({
-          type: "minus",
-          title: "Gameplay used",
-          minutes: spent,
-          meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
-          timestamp: `Subtracted ${getTimestampLabel()}`,
-          createdAt: new Date().toISOString()
+          addLedgerEntry({
+            type: "minus",
+            title: "Gameplay used",
+            minutes: spent,
+            meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
+            timestamp: `Subtracted ${getTimestampLabel()}`,
+            createdAt: new Date().toISOString()
+          });
+
+          setOcrStatus("Минуты списаны. Изменения синхронизируются автоматически.", "good");
         });
       });
 
@@ -1149,6 +1235,7 @@
         ledger = [];
         saveLedger();
         renderLedger();
+        setOcrStatus("Лог очищен. Изменения синхронизируются автоматически.", "good");
       });
 
       resetButton.addEventListener("click", function () {
@@ -1180,74 +1267,73 @@
         controlHint.textContent = "Control Center закрыт. Ручной ввод снова скрыт.";
       });
 
-      fetchLinkButton.addEventListener("click", fetchActivityFromLink);
+      fetchLinkButton.addEventListener("click", function () {
+        withButtonLoading(fetchLinkButton, fetchActivityFromLink);
+      });
 
-      signUpButton.addEventListener("click", async function () {
-        const email = authEmailField.value.trim();
-        const password = authPasswordField.value;
+      signUpButton.addEventListener("click", function () {
+        withButtonLoading(signUpButton, async function () {
+          const email = authEmailField.value.trim();
+          const password = authPasswordField.value;
 
-        if (!email || !password) {
-          setAuthStatus("Введите email и пароль для регистрации.", "bad");
-          return;
-        }
+          if (!email || !password) {
+            setAuthStatus("Введите email и пароль для регистрации.", "bad");
+            return;
+          }
 
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password
+          });
+
+          if (error) {
+            setAuthStatus(error.message, "bad");
+            return;
+          }
+
+          currentUser = data.user || null;
+          authPasswordField.value = "";
+          if (currentUser) {
+            await loadRemoteState();
+          } else {
+            setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
+          }
         });
+      });
 
-        if (error) {
-          setAuthStatus(error.message, "bad");
-          return;
-        }
+      logInButton.addEventListener("click", function () {
+        withButtonLoading(logInButton, async function () {
+          const email = authEmailField.value.trim();
+          const password = authPasswordField.value;
 
-        currentUser = data.user || null;
-        authPasswordField.value = "";
-        if (currentUser) {
+          if (!email || !password) {
+            setAuthStatus("Введите email и пароль для входа.", "bad");
+            return;
+          }
+
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+
+          if (error) {
+            setAuthStatus(error.message, "bad");
+            return;
+          }
+
+          currentUser = data.user;
+          authPasswordField.value = "";
           await loadRemoteState();
-        } else {
-          setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
-        }
-      });
-
-      logInButton.addEventListener("click", async function () {
-        const email = authEmailField.value.trim();
-        const password = authPasswordField.value;
-
-        if (!email || !password) {
-          setAuthStatus("Введите email и пароль для входа.", "bad");
-          return;
-        }
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
         });
-
-        if (error) {
-          setAuthStatus(error.message, "bad");
-          return;
-        }
-
-        currentUser = data.user;
-        authPasswordField.value = "";
-        await loadRemoteState();
       });
 
-      logOutButton.addEventListener("click", async function () {
-        await supabase.auth.signOut();
-        currentUser = null;
-        setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
-      });
-
-      syncNowButton.addEventListener("click", async function () {
-        if (!currentUser) {
-          setAuthStatus("Сначала войдите, потом можно синхронизировать данные в облако.", "bad");
-          return;
-        }
-
-        await persistState();
-        await loadRemoteState();
+      logOutButton.addEventListener("click", function () {
+        withButtonLoading(logOutButton, async function () {
+          await supabase.auth.signOut();
+          currentUser = null;
+          lastRemoteEntryCount = 0;
+          setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
+        });
       });
 
       const {
