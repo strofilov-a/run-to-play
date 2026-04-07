@@ -86,6 +86,10 @@
         align-items: start;
       }
 
+      .auth-shell {
+        margin-bottom: 1rem;
+      }
+
       .card {
         border: 1px solid var(--line);
         border-radius: var(--radius-xl);
@@ -97,6 +101,10 @@
       .main-card,
       .side-card {
         padding: 1.35rem;
+      }
+
+      .auth-card {
+        padding: 1.25rem;
       }
 
       .section-title {
@@ -314,6 +322,20 @@
         line-height: 1.55;
       }
 
+      .auth-status {
+        margin-top: 0.8rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .auth-status.good {
+        color: var(--good);
+      }
+
+      .auth-status.bad {
+        color: var(--bad);
+      }
+
       .control-panel {
         margin-top: 1rem;
       }
@@ -431,6 +453,32 @@
           Вставь ссылку на активность, и сайт попробует автоматически вытащить
           пульс и чистое время, а затем подставит их в конвертер.
         </p>
+      </section>
+
+      <section class="auth-shell">
+        <section class="card auth-card">
+          <h2 class="section-title">Общий доступ через интернет</h2>
+          <div class="grid">
+            <div class="field">
+              <label for="authEmail">Email</label>
+              <input id="authEmail" type="email" placeholder="parent@example.com" />
+            </div>
+            <div class="field">
+              <label for="authPassword">Пароль</label>
+              <input id="authPassword" type="password" placeholder="Введите пароль" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="signUpButton" type="button">Sign Up</button>
+            <button class="secondary" id="logInButton" type="button">Log In</button>
+            <button class="secondary" id="logOutButton" type="button">Log Out</button>
+          </div>
+
+          <div class="auth-status" id="authStatus">
+            Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.
+          </div>
+        </section>
       </section>
 
       <section class="layout">
@@ -592,13 +640,18 @@
       </section>
     </main>
 
-    <script>
+    <script type="module">
+      import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
       const CONTROL_CODE = "4798";
+      const SUPABASE_URL = "https://redwncjfnkgnoglzhzdz.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_ftH6aqby5DJ-mzpIQbbipg_jnJ3Lk8B";
       const COEFFICIENTS = {
         Running: 170,
         Cycling: 230,
         Gym: 250
       };
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       const form = document.getElementById("calculator");
       const controlCodeField = document.getElementById("controlCode");
@@ -622,6 +675,12 @@
       const subtractButton = document.getElementById("subtractButton");
       const clearLogButton = document.getElementById("clearLogButton");
       const subtractMinutesField = document.getElementById("subtractMinutes");
+      const authEmailField = document.getElementById("authEmail");
+      const authPasswordField = document.getElementById("authPassword");
+      const signUpButton = document.getElementById("signUpButton");
+      const logInButton = document.getElementById("logInButton");
+      const logOutButton = document.getElementById("logOutButton");
+      const authStatus = document.getElementById("authStatus");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
       const resultSentence = document.getElementById("resultSentence");
@@ -643,6 +702,7 @@
       };
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
+      let currentUser = null;
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -705,6 +765,7 @@
 
       function saveCoefficients() {
         localStorage.setItem(COEFFICIENT_STORAGE_KEY, JSON.stringify(getCurrentCoefficients()));
+        persistState();
       }
 
       function loadCoefficients() {
@@ -735,6 +796,7 @@
 
       function saveLedger() {
         localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+        persistState();
       }
 
       function loadLedger() {
@@ -755,6 +817,74 @@
         } catch (error) {
           ledger = [];
         }
+      }
+
+      function setAuthStatus(message, tone) {
+        authStatus.textContent = message;
+        authStatus.className = `auth-status${tone ? ` ${tone}` : ""}`;
+      }
+
+      async function persistState() {
+        if (!currentUser) {
+          return;
+        }
+
+        const { error } = await supabase
+          .from("family_state")
+          .upsert({
+            user_id: currentUser.id,
+            ledger,
+            coefficients: getCurrentCoefficients()
+          });
+
+        if (error) {
+          setAuthStatus("Вход выполнен, но не удалось сохранить данные в облако. Проверь SQL в Supabase.", "bad");
+        }
+      }
+
+      async function loadRemoteState() {
+        if (!currentUser) {
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("family_state")
+          .select("ledger, coefficients")
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+
+        if (error) {
+          setAuthStatus("Не удалось загрузить облачные данные. Проверь таблицу и политики Supabase.", "bad");
+          return;
+        }
+
+        if (!data) {
+          await persistState();
+          setAuthStatus(`Вы вошли как ${currentUser.email}. Создано новое облачное хранилище семьи.`, "good");
+          return;
+        }
+
+        if (Array.isArray(data.ledger)) {
+          ledger = data.ledger;
+        }
+
+        if (data.coefficients) {
+          if (data.coefficients.Running) {
+            runningCoefficientField.value = data.coefficients.Running;
+          }
+          if (data.coefficients.Cycling) {
+            cyclingCoefficientField.value = data.coefficients.Cycling;
+          }
+          if (data.coefficients.Gym) {
+            gymCoefficientField.value = data.coefficients.Gym;
+          }
+        }
+
+        saveLedger();
+        localStorage.setItem(COEFFICIENT_STORAGE_KEY, JSON.stringify(getCurrentCoefficients()));
+        renderLedger();
+        updatePreview();
+        setAuthStatus(`Вы вошли как ${currentUser.email}. Показаны общие данные семьи из облака.`, "good");
       }
 
       function computeBalanceFromLedger() {
@@ -1031,6 +1161,85 @@
       });
 
       fetchLinkButton.addEventListener("click", fetchActivityFromLink);
+
+      signUpButton.addEventListener("click", async function () {
+        const email = authEmailField.value.trim();
+        const password = authPasswordField.value;
+
+        if (!email || !password) {
+          setAuthStatus("Введите email и пароль для регистрации.", "bad");
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password
+        });
+
+        if (error) {
+          setAuthStatus(error.message, "bad");
+          return;
+        }
+
+        currentUser = data.user || null;
+        authPasswordField.value = "";
+        if (currentUser) {
+          await loadRemoteState();
+        } else {
+          setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
+        }
+      });
+
+      logInButton.addEventListener("click", async function () {
+        const email = authEmailField.value.trim();
+        const password = authPasswordField.value;
+
+        if (!email || !password) {
+          setAuthStatus("Введите email и пароль для входа.", "bad");
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) {
+          setAuthStatus(error.message, "bad");
+          return;
+        }
+
+        currentUser = data.user;
+        authPasswordField.value = "";
+        await loadRemoteState();
+      });
+
+      logOutButton.addEventListener("click", async function () {
+        await supabase.auth.signOut();
+        currentUser = null;
+        setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
+      });
+
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        currentUser = session.user;
+        authEmailField.value = session.user.email || "";
+        await loadRemoteState();
+      } else {
+        setAuthStatus("Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.", "");
+      }
+
+      supabase.auth.onAuthStateChange(async function (_event, sessionState) {
+        currentUser = sessionState?.user || null;
+
+        if (currentUser) {
+          authEmailField.value = currentUser.email || "";
+          await loadRemoteState();
+        }
+      });
 
       loadCoefficients();
       loadLedger();
