@@ -544,9 +544,6 @@
           <div class="summary">
             <p class="kicker">Эта тренировка даёт</p>
             <h2 class="big-number" id="earnedMinutes">0m</h2>
-            <p class="summary-copy" id="resultSentence">
-              Активность на 0 минут при 0 bpm даёт 0m игрового времени.
-            </p>
           </div>
 
           <div class="ocr-box">
@@ -752,7 +749,6 @@
       const authStatus = document.getElementById("authStatus");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
-      const resultSentence = document.getElementById("resultSentence");
       const balanceMinutes = document.getElementById("balanceMinutes");
       const ledgerList = document.getElementById("ledgerList");
       const emptyState = document.getElementById("emptyState");
@@ -1084,9 +1080,6 @@
         const session = calculateSession();
         coefficientNote.innerHTML = `${session.activity} coefficient: <strong>${session.coefficient}</strong>`;
         earnedMinutes.textContent = formatMinutes(session.totalRounded);
-        resultSentence.textContent =
-          `Активность на ${session.duration} минут при ${session.heartRate} bpm даёт ` +
-          `${formatMinutes(session.totalRounded)} игрового времени.`;
       }
 
       function setControlCenterState(isOpen) {
