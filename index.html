@@ -686,14 +686,14 @@
               <label for="authPassword">Пароль</label>
               <input id="authPassword" type="password" placeholder="Введите пароль" />
             </div>
-            <div class="field">
+            <div class="field full">
               <label for="authRole">Роль для Sign Up</label>
               <select id="authRole">
                 <option value="parent">Parent</option>
                 <option value="kid">Kid</option>
               </select>
             </div>
-            <div class="field">
+            <div class="field full">
               <label for="familyCode">Семейный код</label>
               <input id="familyCode" type="text" placeholder="Только для Kid" />
               <span class="hint" id="familyCodeHint">Для parent оставь пустым. Для kid введи код родителя.</span>
@@ -1041,14 +1041,21 @@
       function updateProfileSummary() {
         if (!currentUser || !currentProfile) {
           profileSummary.hidden = true;
+          profileSummary.style.display = "none";
           return;
         }
 
         profileSummary.hidden = false;
+        profileSummary.style.display = "flex";
         roleBadge.textContent = currentProfile.role === KID_ROLE ? "Kid mode" : "Parent mode";
         familyBadge.textContent = currentProfile.family_code
           ? `Family code: ${currentProfile.family_code}`
           : `Family linked: ${currentProfile.family_id.slice(0, 8).toUpperCase()}`;
+      }
+
+      function setSectionVisibility(element, isVisible, displayMode = "block") {
+        element.hidden = !isVisible;
+        element.style.display = isVisible ? displayMode : "none";
       }
 
       function updateRoleUI() {
@@ -1058,10 +1065,10 @@
           setControlCenterState(false);
         }
 
-        controlGate.hidden = kidMode;
-        spendCard.hidden = kidMode;
-        clearLogButton.hidden = kidMode;
-        subtractButton.hidden = kidMode;
+        setSectionVisibility(controlGate, !kidMode);
+        setSectionVisibility(spendCard, !kidMode);
+        setSectionVisibility(clearLogButton, !kidMode, "inline-flex");
+        setSectionVisibility(subtractButton, !kidMode, "inline-flex");
         updateProfileSummary();
       }
 
