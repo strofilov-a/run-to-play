@@ -715,6 +715,13 @@
         Cycling: 230,
         Gym: 250
       };
+      const DEFAULT_AUTH_STATUS =
+        "Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.";
+      const CONTROL_CENTER_HINT =
+        "Control Center открыт: найденный пульс можно редактировать вручную.";
+      const LOCKED_HEART_RATE_HINT =
+        "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
+      const AUTO_SYNC_MESSAGE = "Изменения синхронизируются автоматически.";
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       const form = document.getElementById("calculator");
@@ -772,6 +779,11 @@
       let lastRemoteEntryCount = 0;
       let controlCenterOpen = false;
       let lastImportedUrl = "";
+
+      function setStatus(element, baseClass, message, tone) {
+        element.textContent = message;
+        element.className = `${baseClass}${tone ? ` ${tone}` : ""}`;
+      }
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -832,8 +844,16 @@
         };
       }
 
-      function saveCoefficients() {
+      function storeCoefficientsLocally() {
         localStorage.setItem(COEFFICIENT_STORAGE_KEY, JSON.stringify(getCurrentCoefficients()));
+      }
+
+      function storeLedgerLocally() {
+        localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+      }
+
+      function saveCoefficients() {
+        storeCoefficientsLocally();
         persistState();
       }
 
@@ -864,7 +884,7 @@
       }
 
       function saveLedger() {
-        localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+        storeLedgerLocally();
         persistState();
       }
 
@@ -891,8 +911,7 @@
       function setAuthStatus(message, tone) {
         const localCount = Array.isArray(ledger) ? ledger.length : 0;
         const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
-        authStatus.textContent = `${message}${cloudPart}`;
-        authStatus.className = `auth-status${tone ? ` ${tone}` : ""}`;
+        setStatus(authStatus, "auth-status", `${message}${cloudPart}`, tone);
       }
 
       async function withButtonLoading(button, action) {
@@ -980,8 +999,8 @@
           }
         }
 
-        saveLedger();
-        localStorage.setItem(COEFFICIENT_STORAGE_KEY, JSON.stringify(getCurrentCoefficients()));
+        storeLedgerLocally();
+        storeCoefficientsLocally();
         renderLedger();
         updatePreview();
         setAuthStatus(`Вы вошли как ${currentUser.email}. Показаны общие данные семьи из облака.`, "good");
@@ -1079,13 +1098,32 @@
         earnedMinutes.textContent = formatMinutes(session.totalRounded);
       }
 
+      function createLedgerEntry(overrides) {
+        return {
+          createdAt: new Date().toISOString(),
+          ...overrides
+        };
+      }
+
+      function appendLedgerSource(item, entry) {
+        if (!entry.sourceUrl) {
+          return;
+        }
+
+        const source = document.createElement("a");
+        source.className = "ledger-source";
+        source.href = entry.sourceUrl;
+        source.target = "_blank";
+        source.rel = "noreferrer";
+        source.textContent = "Источник активности";
+        item.append(source);
+      }
+
       function setControlCenterState(isOpen) {
         controlCenterOpen = isOpen;
         controlPanel.hidden = !isOpen;
         heartRateField.disabled = !isOpen;
-        heartRateHint.textContent = isOpen
-          ? "Control Center открыт: найденный пульс можно редактировать вручную."
-          : "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
+        heartRateHint.textContent = isOpen ? CONTROL_CENTER_HINT : LOCKED_HEART_RATE_HINT;
         renderLedger();
       }
 
@@ -1143,16 +1181,6 @@
             meta.className = "ledger-meta";
             meta.textContent = entry.meta;
 
-            const source = entry.sourceUrl ? document.createElement("a") : null;
-
-            if (source) {
-              source.className = "ledger-source";
-              source.href = entry.sourceUrl;
-              source.target = "_blank";
-              source.rel = "noreferrer";
-              source.textContent = "Источник активности";
-            }
-
             const time = document.createElement("div");
             time.className = "ledger-time";
             time.textContent = entry.timestamp;
@@ -1170,18 +1198,14 @@
                 });
                 saveLedger();
                 renderLedger();
-                setOcrStatus("Запись удалена. Изменения синхронизируются автоматически.", "good");
+                setOcrStatus(`Запись удалена. ${AUTO_SYNC_MESSAGE}`, "good");
               });
               item.append(top, meta);
-              if (source) {
-                item.append(source);
-              }
+              appendLedgerSource(item, entry);
               item.append(time, deleteButton);
             } else {
               item.append(top, meta);
-              if (source) {
-                item.append(source);
-              }
+              appendLedgerSource(item, entry);
               item.append(time);
             }
 
@@ -1202,7 +1226,7 @@
       function addCurrentSessionToLog() {
         const session = calculateSession();
 
-        addLedgerEntry({
+        addLedgerEntry(createLedgerEntry({
           type: "plus",
           title: `${session.activity} added`,
           minutes: session.totalRounded,
@@ -1210,16 +1234,14 @@
             `${session.duration} min at ${session.heartRate} bpm` +
             `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
           timestamp: `Added ${getTimestampLabel()}`,
-          createdAt: new Date().toISOString(),
           sourceUrl: lastImportedUrl || ""
-        });
+        }));
 
-        setOcrStatus("Запись добавлена. Изменения синхронизируются автоматически.", "good");
+        setOcrStatus(`Запись добавлена. ${AUTO_SYNC_MESSAGE}`, "good");
       }
 
       function setOcrStatus(message, tone) {
-        ocrStatus.textContent = message;
-        ocrStatus.className = `ocr-status${tone ? ` ${tone}` : ""}`;
+        setStatus(ocrStatus, "ocr-status", message, tone);
       }
 
       function updateDetectedDisplay() {
@@ -1282,10 +1304,15 @@
         updatePreview();
       });
 
-      [activityField, heartRateField, durationField, bonusField].forEach(function (field) {
-        field.addEventListener("input", updatePreview);
-        field.addEventListener("change", updatePreview);
-      });
+      function bindEvents(fields, handler, events) {
+        fields.forEach(function (field) {
+          events.forEach(function (eventName) {
+            field.addEventListener(eventName, handler);
+          });
+        });
+      }
+
+      bindEvents([activityField, heartRateField, durationField, bonusField], updatePreview, ["input", "change"]);
 
       activityUrlField.addEventListener("input", function () {
         if (activityUrlField.value.trim() !== lastImportedUrl) {
@@ -1293,12 +1320,8 @@
         }
       });
 
-      [runningCoefficientField, cyclingCoefficientField, gymCoefficientField].forEach(function (field) {
-        field.addEventListener("input", updatePreview);
-        field.addEventListener("change", updatePreview);
-        field.addEventListener("input", saveCoefficients);
-        field.addEventListener("change", saveCoefficients);
-      });
+      bindEvents([runningCoefficientField, cyclingCoefficientField, gymCoefficientField], updatePreview, ["input", "change"]);
+      bindEvents([runningCoefficientField, cyclingCoefficientField, gymCoefficientField], saveCoefficients, ["input", "change"]);
 
       addButton.addEventListener("click", function () {
         withButtonLoading(addButton, async function () {
@@ -1322,16 +1345,15 @@
 
           const spent = Math.min(balance, Math.round(subtractMinutes));
 
-          addLedgerEntry({
+          addLedgerEntry(createLedgerEntry({
             type: "minus",
             title: "Gameplay used",
             minutes: spent,
             meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
-            timestamp: `Subtracted ${getTimestampLabel()}`,
-            createdAt: new Date().toISOString()
-          });
+            timestamp: `Subtracted ${getTimestampLabel()}`
+          }));
 
-          setOcrStatus("Минуты списаны. Изменения синхронизируются автоматически.", "good");
+          setOcrStatus(`Минуты списаны. ${AUTO_SYNC_MESSAGE}`, "good");
         });
       });
 
@@ -1339,7 +1361,7 @@
         ledger = [];
         saveLedger();
         renderLedger();
-        setOcrStatus("Лог очищен. Изменения синхронизируются автоматически.", "good");
+        setOcrStatus(`Лог очищен. ${AUTO_SYNC_MESSAGE}`, "good");
       });
 
       resetButton.addEventListener("click", function () {
@@ -1448,7 +1470,7 @@
         await loadRemoteState();
       } else {
         lastRemoteEntryCount = 0;
-        setAuthStatus("Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.", "");
+        setAuthStatus(DEFAULT_AUTH_STATUS, "");
       }
 
       supabase.auth.onAuthStateChange(async function (_event, sessionState) {
@@ -1457,6 +1479,9 @@
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
           await loadRemoteState();
+        } else {
+          lastRemoteEntryCount = 0;
+          setAuthStatus(DEFAULT_AUTH_STATUS, "");
         }
       });
 
