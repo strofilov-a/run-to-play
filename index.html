@@ -735,6 +735,7 @@
             <div class="control-panel" id="controlPanel" hidden>
               <div class="actions" style="margin-bottom: 1rem;">
                 <button class="secondary" id="closeControlButton" type="button">Закрыть Control Center</button>
+                <button class="danger" id="clearLogButton" type="button">Очистить лог</button>
               </div>
 
               <form id="calculator">
@@ -830,7 +831,6 @@
 
             <div class="ledger-actions">
               <button class="danger" id="subtractButton" type="button">Вычесть из баланса</button>
-              <button class="secondary" id="clearLogButton" type="button">Очистить лог</button>
             </div>
           </div>
 
@@ -947,6 +947,8 @@
       let controlCenterOpen = false;
       let lastImportedUrl = "";
       let parentUnlocked = false;
+      let clearLogArmed = false;
+      let clearLogTimeoutId = null;
 
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
@@ -975,8 +977,23 @@
 
         setSectionVisibility(controlGate, !kidMode);
         setSectionVisibility(spendCard, !kidMode);
-        setSectionVisibility(clearLogButton, !kidMode, "inline-flex");
         setSectionVisibility(subtractButton, !kidMode, "inline-flex");
+      }
+
+      function resetClearLogConfirmation() {
+        clearLogArmed = false;
+        clearLogButton.textContent = "Очистить лог";
+
+        if (clearLogTimeoutId) {
+          clearTimeout(clearLogTimeoutId);
+          clearLogTimeoutId = null;
+        }
+      }
+
+      function armClearLogConfirmation() {
+        clearLogArmed = true;
+        clearLogButton.textContent = "Нажми ещё раз";
+        clearLogTimeoutId = setTimeout(resetClearLogConfirmation, 5000);
       }
 
       function formatMinutes(value) {
@@ -1509,6 +1526,7 @@
           controlPanel.hidden = true;
           heartRateField.disabled = true;
           heartRateHint.textContent = LOCKED_HEART_RATE_HINT;
+          resetClearLogConfirmation();
           return;
         }
 
@@ -1516,6 +1534,11 @@
         controlPanel.hidden = !isOpen;
         heartRateField.disabled = !isOpen;
         heartRateHint.textContent = isOpen ? CONTROL_CENTER_HINT : LOCKED_HEART_RATE_HINT;
+
+        if (!isOpen) {
+          resetClearLogConfirmation();
+        }
+
         renderLedger();
       }
 
@@ -1746,6 +1769,23 @@
       }));
 
       clearLogButton.addEventListener("click", function () {
+        if (!hasParentAccess() || !controlCenterOpen) {
+          return;
+        }
+
+        if (!clearLogArmed) {
+          armClearLogConfirmation();
+          setOcrStatus("Очистка вооружена. Нажми ещё раз, чтобы подтвердить.", "bad");
+          return;
+        }
+
+        resetClearLogConfirmation();
+
+        if (!window.confirm("Точно очистить весь лог? Это действие нельзя отменить.")) {
+          setOcrStatus("Очистка отменена.", "");
+          return;
+        }
+
         ledger = [];
         saveLedger();
         renderLedger();
@@ -1776,6 +1816,7 @@
         parentUnlocked = false;
         updateRoleUI();
         setControlCenterState(false);
+        resetClearLogConfirmation();
         controlCodeField.value = "";
       });
 
@@ -1843,6 +1884,7 @@
           currentUser = null;
           lastRemoteEntryCount = 0;
           parentUnlocked = false;
+          resetClearLogConfirmation();
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
           updateRoleUI();
       }));
