@@ -303,11 +303,6 @@
         border: 1px solid rgba(67, 42, 23, 0.08);
       }
 
-      .locked-copy {
-        color: var(--muted);
-        line-height: 1.55;
-      }
-
       .auth-status {
         margin-top: 0.8rem;
         color: var(--muted);
@@ -554,11 +549,6 @@
           </div>
 
           <div class="control-gate">
-            <h3 class="section-title" style="margin-bottom: 0.25rem;">Control Center</h3>
-            <p class="locked-copy" id="controlHint">
-              Для ребёнка достаточно вставить ссылку выше. Ручной ввод и редактирование коэффициентов закрыты кодом.
-            </p>
-
             <div class="grid" style="margin-top: 1rem;">
               <div class="field">
                 <label for="controlCode">Код доступа</label>
@@ -678,7 +668,6 @@
       const unlockButton = document.getElementById("unlockButton");
       const closeControlButton = document.getElementById("closeControlButton");
       const controlPanel = document.getElementById("controlPanel");
-      const controlHint = document.getElementById("controlHint");
       const activityField = document.getElementById("activity");
       const heartRateField = document.getElementById("heartRate");
       const heartRateHint = document.getElementById("heartRateHint");
@@ -1233,20 +1222,17 @@
       unlockButton.addEventListener("click", function () {
         if (controlCodeField.value === CONTROL_CODE) {
           setControlCenterState(true);
-          controlHint.textContent = "Control Center открыт. Можно вручную менять значения и коэффициенты.";
           setOcrStatus("Control Center открыт.", "good");
           controlCodeField.value = "";
           return;
         }
 
         setControlCenterState(false);
-        controlHint.textContent = "Неверный код. Для ребёнка режим по ссылке остаётся доступным.";
         controlCodeField.value = "";
       });
 
       closeControlButton.addEventListener("click", function () {
         setControlCenterState(false);
-        controlHint.textContent = "Control Center закрыт. Ручной ввод снова скрыт.";
       });
 
       fetchLinkButton.addEventListener("click", function () {
