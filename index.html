@@ -1002,6 +1002,24 @@
         element.className = `${baseClass}${tone ? ` ${tone}` : ""}`;
       }
 
+      function formatAppError(error, fallbackMessage) {
+        const rawMessage = error?.message || String(error || "");
+
+        if (rawMessage.includes("public.profiles")) {
+          return "Нужно выполнить новый SQL в Supabase: таблица profiles ещё не создана.";
+        }
+
+        if (rawMessage.includes("find_family_by_code")) {
+          return "Нужно выполнить новый SQL в Supabase: функция семейного кода ещё не создана.";
+        }
+
+        if (rawMessage.includes("family_state")) {
+          return "Нужно выполнить новый SQL в Supabase: семейные таблицы ещё не обновлены.";
+        }
+
+        return rawMessage || fallbackMessage;
+      }
+
       function normalizeFamilyCode(value) {
         return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
       }
@@ -1178,7 +1196,7 @@
           .maybeSingle();
 
         if (error) {
-          throw error;
+          throw new Error(formatAppError(error, "Не удалось загрузить профиль."));
         }
 
         return data;
@@ -1190,7 +1208,7 @@
         });
 
         if (error) {
-          throw error;
+          throw new Error(formatAppError(error, "Не удалось найти семью по коду."));
         }
 
         return Array.isArray(data) ? data[0]?.family_id || null : null;
@@ -1242,7 +1260,7 @@
           .single();
 
         if (error) {
-          throw error;
+          throw new Error(formatAppError(error, "Не удалось сохранить профиль."));
         }
 
         currentProfile = data;
@@ -1960,7 +1978,9 @@
               });
               await loadRemoteState();
             } catch (profileError) {
-              setAuthStatus(profileError.message || "Не удалось подготовить семейный профиль.", "bad");
+              currentProfile = null;
+              updateRoleUI();
+              setAuthStatus(formatAppError(profileError, "Не удалось подготовить семейный профиль."), "bad");
             }
           } else {
             setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
@@ -1994,7 +2014,9 @@
             await ensureProfileForUser(data.user);
             await loadRemoteState();
           } catch (profileError) {
-            setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+            currentProfile = null;
+            updateRoleUI();
+            setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
           }
         });
       });
@@ -2029,7 +2051,9 @@
           await ensureProfileForUser(session.user);
           await loadRemoteState();
         } catch (profileError) {
-          setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+          currentProfile = null;
+          updateRoleUI();
+          setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
         }
       } else {
         lastRemoteEntryCount = 0;
@@ -2046,7 +2070,9 @@
             await ensureProfileForUser(currentUser);
             await loadRemoteState();
           } catch (profileError) {
-            setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+            currentProfile = null;
+            updateRoleUI();
+            setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
           }
         } else {
           currentProfile = null;
