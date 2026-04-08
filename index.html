@@ -150,6 +150,10 @@
         font: inherit;
       }
 
+      input[type="password"] {
+        -webkit-text-security: disc;
+      }
+
       input:focus,
       select:focus {
         outline: 2px solid rgba(234, 111, 47, 0.22);
@@ -256,34 +260,6 @@
       .stat-chip span {
         color: var(--muted);
         font-size: 0.84rem;
-      }
-
-      .profile-summary {
-        margin-top: 1rem;
-        display: flex;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-      }
-
-      .profile-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.55rem 0.8rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(67, 42, 23, 0.08);
-        color: var(--text);
-        font-size: 0.85rem;
-        font-weight: 800;
-      }
-
-      .profile-pill.good {
-        color: var(--good);
-      }
-
-      .profile-pill.accent {
-        color: #9f4715;
       }
 
       .note {
@@ -686,18 +662,6 @@
               <label for="authPassword">Пароль</label>
               <input id="authPassword" type="password" placeholder="Введите пароль" />
             </div>
-            <div class="field full">
-              <label for="authRole">Роль для Sign Up</label>
-              <select id="authRole">
-                <option value="parent">Parent</option>
-                <option value="kid">Kid</option>
-              </select>
-            </div>
-            <div class="field full">
-              <label for="familyCode">Семейный код</label>
-              <input id="familyCode" type="text" placeholder="Только для Kid" />
-              <span class="hint" id="familyCodeHint">Для parent оставь пустым. Для kid введи код родителя.</span>
-            </div>
           </div>
 
           <div class="actions">
@@ -708,11 +672,6 @@
 
           <div class="auth-status" id="authStatus">
             Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.
-          </div>
-
-          <div class="profile-summary" id="profileSummary" hidden>
-            <div class="profile-pill good" id="roleBadge">Parent mode</div>
-            <div class="profile-pill accent" id="familyBadge">Family code: -</div>
           </div>
         </section>
       </section>
@@ -766,10 +725,10 @@
             <div class="grid" style="margin-top: 1rem;">
               <div class="field">
                 <label for="controlCode">Код доступа</label>
-                <input id="controlCode" type="password" inputmode="numeric" placeholder="Введите код" />
+                <input id="controlCode" type="password" inputmode="numeric" autocomplete="off" placeholder="Введите код" />
               </div>
               <div class="field" style="align-content: end;">
-                <button class="secondary" id="unlockButton" type="button">Открыть Control Center</button>
+                <button class="secondary" id="unlockButton" type="button">Открыть Parent Mode</button>
               </div>
             </div>
 
@@ -925,8 +884,6 @@
       const LOCKED_HEART_RATE_HINT =
         "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
       const AUTO_SYNC_MESSAGE = "Изменения синхронизируются автоматически.";
-      const PARENT_ROLE = "parent";
-      const KID_ROLE = "kid";
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       const form = document.getElementById("calculator");
@@ -952,16 +909,10 @@
       const subtractMinutesField = document.getElementById("subtractMinutes");
       const authEmailField = document.getElementById("authEmail");
       const authPasswordField = document.getElementById("authPassword");
-      const authRoleField = document.getElementById("authRole");
-      const familyCodeField = document.getElementById("familyCode");
-      const familyCodeHint = document.getElementById("familyCodeHint");
       const signUpButton = document.getElementById("signUpButton");
       const logInButton = document.getElementById("logInButton");
       const logOutButton = document.getElementById("logOutButton");
       const authStatus = document.getElementById("authStatus");
-      const profileSummary = document.getElementById("profileSummary");
-      const roleBadge = document.getElementById("roleBadge");
-      const familyBadge = document.getElementById("familyBadge");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
       const balanceMinutes = document.getElementById("balanceMinutes");
@@ -992,7 +943,6 @@
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
       let currentUser = null;
-      let currentProfile = null;
       let lastRemoteEntryCount = 0;
       let controlCenterOpen = false;
       let lastImportedUrl = "";
@@ -1003,63 +953,12 @@
         element.className = `${baseClass}${tone ? ` ${tone}` : ""}`;
       }
 
-      function formatAppError(error, fallbackMessage) {
-        const rawMessage = error?.message || String(error || "");
-
-        if (rawMessage.includes("public.profiles")) {
-          return "Нужно выполнить новый SQL в Supabase: таблица profiles ещё не создана.";
-        }
-
-        if (rawMessage.includes("find_family_by_code")) {
-          return "Нужно выполнить новый SQL в Supabase: функция семейного кода ещё не создана.";
-        }
-
-        if (rawMessage.includes("family_state")) {
-          return "Нужно выполнить новый SQL в Supabase: семейные таблицы ещё не обновлены.";
-        }
-
-        return rawMessage || fallbackMessage;
-      }
-
-      function normalizeFamilyCode(value) {
-        return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-      }
-
-      function generateFamilyCode() {
-        return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-      }
-
       function hasParentAccess() {
-        return currentProfile?.role === PARENT_ROLE && parentUnlocked;
+        return Boolean(currentUser) && parentUnlocked;
       }
 
       function isKidMode() {
         return !hasParentAccess();
-      }
-
-      function updateFamilyCodeHint() {
-        familyCodeHint.textContent = authRoleField.value === KID_ROLE
-          ? "Для kid введи код родителя, чтобы подключиться к общей семье."
-          : "Для parent оставь пустым. Код семьи появится после входа.";
-      }
-
-      function updateProfileSummary() {
-        if (!currentUser || !currentProfile) {
-          profileSummary.hidden = true;
-          profileSummary.style.display = "none";
-          return;
-        }
-
-        profileSummary.hidden = false;
-        profileSummary.style.display = "flex";
-        roleBadge.textContent = hasParentAccess()
-          ? "Parent mode"
-          : currentProfile.role === PARENT_ROLE
-            ? "Parent locked"
-            : "Kid mode";
-        familyBadge.textContent = currentProfile.family_code
-          ? `Family code: ${currentProfile.family_code}`
-          : `Family linked: ${currentProfile.family_id.slice(0, 8).toUpperCase()}`;
       }
 
       function setSectionVisibility(element, isVisible, displayMode = "block") {
@@ -1078,7 +977,6 @@
         setSectionVisibility(spendCard, !kidMode);
         setSectionVisibility(clearLogButton, !kidMode, "inline-flex");
         setSectionVisibility(subtractButton, !kidMode, "inline-flex");
-        updateProfileSummary();
       }
 
       function formatMinutes(value) {
@@ -1204,86 +1102,6 @@
         }
       }
 
-      async function fetchOwnProfile(userId) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, family_id, family_code, role, display_name")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (error) {
-          throw new Error(formatAppError(error, "Не удалось загрузить профиль."));
-        }
-
-        return data;
-      }
-
-      async function findFamilyByCode(code) {
-        const { data, error } = await supabase.rpc("find_family_by_code", {
-          input_code: normalizeFamilyCode(code)
-        });
-
-        if (error) {
-          throw new Error(formatAppError(error, "Не удалось найти семью по коду."));
-        }
-
-        return Array.isArray(data) ? data[0]?.family_id || null : null;
-      }
-
-      async function ensureProfileForUser(user, options = {}) {
-        const existingProfile = await fetchOwnProfile(user.id);
-
-        if (existingProfile) {
-          currentProfile = existingProfile;
-          updateRoleUI();
-          return existingProfile;
-        }
-
-        const requestedRole = options.role || user.user_metadata?.requested_role || PARENT_ROLE;
-        const requestedFamilyCode = normalizeFamilyCode(
-          options.familyCode || user.user_metadata?.requested_family_code || ""
-        );
-
-        let familyId = user.id;
-        let familyCode = null;
-
-        if (requestedRole === KID_ROLE) {
-          if (!requestedFamilyCode) {
-            throw new Error("Для Kid аккаунта нужен семейный код.");
-          }
-
-          familyId = await findFamilyByCode(requestedFamilyCode);
-
-          if (!familyId) {
-            throw new Error("Семейный код не найден. Проверь код родителя.");
-          }
-        } else {
-          familyCode = requestedFamilyCode || generateFamilyCode();
-        }
-
-        const payload = {
-          id: user.id,
-          family_id: familyId,
-          family_code: familyCode,
-          role: requestedRole,
-          display_name: user.email ? user.email.split("@")[0] : requestedRole
-        };
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .upsert(payload)
-          .select("id, family_id, family_code, role, display_name")
-          .single();
-
-        if (error) {
-          throw new Error(formatAppError(error, "Не удалось сохранить профиль."));
-        }
-
-        currentProfile = data;
-        updateRoleUI();
-        return data;
-      }
-
       function setAuthStatus(message, tone) {
         const localCount = Array.isArray(ledger) ? ledger.length : 0;
         const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
@@ -1305,20 +1123,19 @@
       }
 
       async function persistState() {
-        if (!currentUser || !currentProfile?.family_id) {
+        if (!currentUser) {
           return;
         }
 
         const payload = {
-          user_id: currentProfile.family_id,
-          family_id: currentProfile.family_id,
+          user_id: currentUser.id,
           ledger,
           coefficients: getCurrentCoefficients()
         };
 
         const { data, error } = await supabase
           .from("family_state")
-          .upsert(payload, { onConflict: "family_id" })
+          .upsert(payload, { onConflict: "user_id" })
           .select("ledger")
           .single();
 
@@ -1332,14 +1149,14 @@
       }
 
       async function loadRemoteState() {
-        if (!currentUser || !currentProfile?.family_id) {
+        if (!currentUser) {
           return;
         }
 
         const { data, error } = await supabase
           .from("family_state")
           .select("ledger, coefficients")
-          .eq("family_id", currentProfile.family_id)
+          .eq("user_id", currentUser.id)
           .maybeSingle();
 
         if (error) {
@@ -1868,8 +1685,6 @@
 
       bindEvents([activityField, heartRateField, durationField, bonusField], updatePreview, ["input", "change"]);
 
-      authRoleField.addEventListener("change", updateFamilyCodeHint);
-
       activityUrlField.addEventListener("input", function () {
         if (activityUrlField.value.trim() !== lastImportedUrl) {
           lastImportedUrl = "";
@@ -1932,12 +1747,6 @@
       });
 
       unlockButton.addEventListener("click", function () {
-        if (currentProfile?.role !== PARENT_ROLE) {
-          controlCodeField.value = "";
-          setOcrStatus("Родительский режим доступен только для parent-аккаунта.", "bad");
-          return;
-        }
-
         if (controlCodeField.value === CONTROL_CODE) {
           parentUnlocked = true;
           updateRoleUI();
@@ -1965,28 +1774,15 @@
         withButtonLoading(signUpButton, async function () {
           const email = authEmailField.value.trim();
           const password = authPasswordField.value;
-          const requestedRole = authRoleField.value;
-          const familyCode = normalizeFamilyCode(familyCodeField.value);
 
           if (!email || !password) {
             setAuthStatus("Введите email и пароль для регистрации.", "bad");
             return;
           }
 
-          if (requestedRole === KID_ROLE && !familyCode) {
-            setAuthStatus("Для Kid аккаунта введи семейный код родителя.", "bad");
-            return;
-          }
-
           const { data, error } = await supabase.auth.signUp({
             email,
-            password,
-            options: {
-              data: {
-                requested_role: requestedRole,
-                requested_family_code: familyCode || null
-              }
-            }
+            password
           });
 
           if (error) {
@@ -1997,17 +1793,7 @@
           currentUser = data.user || null;
           authPasswordField.value = "";
           if (currentUser) {
-            try {
-              await ensureProfileForUser(currentUser, {
-                role: requestedRole,
-                familyCode
-              });
-              await loadRemoteState();
-            } catch (profileError) {
-              currentProfile = null;
-              updateRoleUI();
-              setAuthStatus(formatAppError(profileError, "Не удалось подготовить семейный профиль."), "bad");
-            }
+            await loadRemoteState();
           } else {
             setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
           }
@@ -2035,15 +1821,9 @@
           }
 
           currentUser = data.user;
+          parentUnlocked = false;
           authPasswordField.value = "";
-          try {
-            await ensureProfileForUser(data.user);
-            await loadRemoteState();
-          } catch (profileError) {
-            currentProfile = null;
-            updateRoleUI();
-            setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
-          }
+          await loadRemoteState();
         });
       });
 
@@ -2051,7 +1831,6 @@
         withButtonLoading(logOutButton, async function () {
           await supabase.auth.signOut();
           currentUser = null;
-          currentProfile = null;
           lastRemoteEntryCount = 0;
           parentUnlocked = false;
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
@@ -2061,7 +1840,6 @@
 
       loadCoefficients();
       loadLedger();
-      updateFamilyCodeHint();
       setControlCenterState(false);
       updateDetectedDisplay();
       updatePreview();
@@ -2075,14 +1853,7 @@
         currentUser = session.user;
         parentUnlocked = false;
         authEmailField.value = session.user.email || "";
-        try {
-          await ensureProfileForUser(session.user);
-          await loadRemoteState();
-        } catch (profileError) {
-          currentProfile = null;
-          updateRoleUI();
-          setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
-        }
+        await loadRemoteState();
       } else {
         lastRemoteEntryCount = 0;
         setAuthStatus(DEFAULT_AUTH_STATUS, "");
@@ -2095,16 +1866,8 @@
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
-          try {
-            await ensureProfileForUser(currentUser);
-            await loadRemoteState();
-          } catch (profileError) {
-            currentProfile = null;
-            updateRoleUI();
-            setAuthStatus(formatAppError(profileError, "Не удалось загрузить семейный профиль."), "bad");
-          }
+          await loadRemoteState();
         } else {
-          currentProfile = null;
           lastRemoteEntryCount = 0;
           setAuthStatus(DEFAULT_AUTH_STATUS, "");
           updateRoleUI();
