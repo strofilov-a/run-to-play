@@ -996,6 +996,7 @@
       let lastRemoteEntryCount = 0;
       let controlCenterOpen = false;
       let lastImportedUrl = "";
+      let parentUnlocked = false;
 
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
@@ -1028,8 +1029,12 @@
         return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
       }
 
+      function hasParentAccess() {
+        return currentProfile?.role === PARENT_ROLE && parentUnlocked;
+      }
+
       function isKidMode() {
-        return currentProfile?.role === KID_ROLE;
+        return !hasParentAccess();
       }
 
       function updateFamilyCodeHint() {
@@ -1047,7 +1052,11 @@
 
         profileSummary.hidden = false;
         profileSummary.style.display = "flex";
-        roleBadge.textContent = currentProfile.role === KID_ROLE ? "Kid mode" : "Parent mode";
+        roleBadge.textContent = hasParentAccess()
+          ? "Parent mode"
+          : currentProfile.role === PARENT_ROLE
+            ? "Parent locked"
+            : "Kid mode";
         familyBadge.textContent = currentProfile.family_code
           ? `Family code: ${currentProfile.family_code}`
           : `Family linked: ${currentProfile.family_id.slice(0, 8).toUpperCase()}`;
@@ -1923,13 +1932,23 @@
       });
 
       unlockButton.addEventListener("click", function () {
+        if (currentProfile?.role !== PARENT_ROLE) {
+          controlCodeField.value = "";
+          setOcrStatus("Родительский режим доступен только для parent-аккаунта.", "bad");
+          return;
+        }
+
         if (controlCodeField.value === CONTROL_CODE) {
+          parentUnlocked = true;
+          updateRoleUI();
           setControlCenterState(true);
-          setOcrStatus("Control Center открыт.", "good");
+          setOcrStatus("Родительский режим открыт.", "good");
           controlCodeField.value = "";
           return;
         }
 
+        parentUnlocked = false;
+        updateRoleUI();
         setControlCenterState(false);
         controlCodeField.value = "";
       });
@@ -2034,6 +2053,7 @@
           currentUser = null;
           currentProfile = null;
           lastRemoteEntryCount = 0;
+          parentUnlocked = false;
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
           updateRoleUI();
         });
@@ -2053,6 +2073,7 @@
 
       if (session?.user) {
         currentUser = session.user;
+        parentUnlocked = false;
         authEmailField.value = session.user.email || "";
         try {
           await ensureProfileForUser(session.user);
@@ -2070,6 +2091,7 @@
 
       supabase.auth.onAuthStateChange(async function (_event, sessionState) {
         currentUser = sessionState?.user || null;
+        parentUnlocked = false;
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
