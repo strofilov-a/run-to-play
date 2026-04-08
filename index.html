@@ -258,6 +258,34 @@
         font-size: 0.84rem;
       }
 
+      .profile-summary {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .profile-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.55rem 0.8rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+        color: var(--text);
+        font-size: 0.85rem;
+        font-weight: 800;
+      }
+
+      .profile-pill.good {
+        color: var(--good);
+      }
+
+      .profile-pill.accent {
+        color: #9f4715;
+      }
+
       .note {
         margin-top: 1rem;
         padding: 0.95rem 1rem;
@@ -485,8 +513,143 @@
         background: rgba(255, 255, 255, 0.54);
       }
 
+      .insights-shell {
+        margin-top: 1.1rem;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.1rem;
+      }
+
+      .insight-card {
+        padding: 1.35rem;
+      }
+
+      .trend-chart {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+        align-items: end;
+      }
+
+      .trend-column {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: center;
+      }
+
+      .trend-bars {
+        height: 160px;
+        width: 100%;
+        display: flex;
+        align-items: end;
+        justify-content: center;
+        gap: 0.3rem;
+      }
+
+      .trend-bar {
+        width: min(18px, 44%);
+        min-height: 8px;
+        border-radius: 999px 999px 8px 8px;
+      }
+
+      .trend-bar.earned {
+        background: linear-gradient(180deg, #57c48b 0%, #1f7a53 100%);
+      }
+
+      .trend-bar.spent {
+        background: linear-gradient(180deg, #ef9a7d 0%, #b7462d 100%);
+      }
+
+      .trend-day {
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: var(--muted);
+      }
+
+      .trend-total {
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+
+      .calendar-head {
+        margin-top: 1rem;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.45rem;
+      }
+
+      .calendar-head span {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 800;
+        text-transform: uppercase;
+        text-align: center;
+      }
+
+      .calendar-grid {
+        margin-top: 0.5rem;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.45rem;
+      }
+
+      .calendar-cell {
+        min-height: 88px;
+        padding: 0.7rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+        display: grid;
+        align-content: start;
+        gap: 0.3rem;
+      }
+
+      .calendar-cell.empty-day {
+        background: rgba(255, 255, 255, 0.28);
+        border-style: dashed;
+      }
+
+      .calendar-cell.level-1 {
+        background: rgba(255, 245, 236, 0.96);
+      }
+
+      .calendar-cell.level-2 {
+        background: rgba(255, 232, 214, 0.96);
+      }
+
+      .calendar-cell.level-3 {
+        background: rgba(250, 214, 179, 0.96);
+      }
+
+      .calendar-cell.level-4 {
+        background: rgba(244, 189, 145, 0.98);
+      }
+
+      .calendar-date {
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+
+      .calendar-amount {
+        font-size: 0.76rem;
+        font-weight: 800;
+      }
+
+      .calendar-amount.plus {
+        color: var(--good);
+      }
+
+      .calendar-amount.minus {
+        color: var(--bad);
+      }
+
       @media (max-width: 920px) {
         .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .insights-shell {
           grid-template-columns: 1fr;
         }
       }
@@ -523,6 +686,18 @@
               <label for="authPassword">Пароль</label>
               <input id="authPassword" type="password" placeholder="Введите пароль" />
             </div>
+            <div class="field">
+              <label for="authRole">Роль для Sign Up</label>
+              <select id="authRole">
+                <option value="parent">Parent</option>
+                <option value="kid">Kid</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="familyCode">Семейный код</label>
+              <input id="familyCode" type="text" placeholder="Только для Kid" />
+              <span class="hint" id="familyCodeHint">Для parent оставь пустым. Для kid введи код родителя.</span>
+            </div>
           </div>
 
           <div class="actions">
@@ -533,6 +708,11 @@
 
           <div class="auth-status" id="authStatus">
             Сейчас данные хранятся только в этом браузере. Войдите, чтобы видеть один и тот же лог с любого устройства.
+          </div>
+
+          <div class="profile-summary" id="profileSummary" hidden>
+            <div class="profile-pill good" id="roleBadge">Parent mode</div>
+            <div class="profile-pill accent" id="familyBadge">Family code: -</div>
           </div>
         </section>
       </section>
@@ -582,7 +762,7 @@
             </div>
           </div>
 
-          <div class="control-gate">
+          <div class="control-gate" id="controlGate">
             <div class="grid" style="margin-top: 1rem;">
               <div class="field">
                 <label for="controlCode">Код доступа</label>
@@ -682,7 +862,7 @@
             </div>
           </div>
 
-          <div class="summary">
+          <div class="summary" id="spendCard">
             <p class="kicker">Списать минуты</p>
             <div class="field" style="margin-top: 0.9rem;">
               <label for="subtractMinutes">Сколько потратили</label>
@@ -693,11 +873,37 @@
               <button class="danger" id="subtractButton" type="button">Вычесть из баланса</button>
               <button class="secondary" id="clearLogButton" type="button">Очистить лог</button>
             </div>
+          </div>
 
+          <div class="summary">
+            <p class="kicker">История</p>
             <div class="empty" id="emptyState">Лог пуст. Добавьте первую тренировку.</div>
             <ul class="ledger-list" id="ledgerList"></ul>
           </div>
         </aside>
+      </section>
+
+      <section class="insights-shell">
+        <section class="card insight-card">
+          <p class="kicker">Последние 7 дней</p>
+          <p class="summary-copy">Зелёное показывает заработанные минуты, красное - потраченные.</p>
+          <div class="trend-chart" id="trendChart"></div>
+        </section>
+
+        <section class="card insight-card">
+          <p class="kicker">Календарь месяца</p>
+          <p class="summary-copy" id="calendarMonthLabel">Текущий месяц.</p>
+          <div class="calendar-head">
+            <span>Пн</span>
+            <span>Вт</span>
+            <span>Ср</span>
+            <span>Чт</span>
+            <span>Пт</span>
+            <span>Сб</span>
+            <span>Вс</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
       </section>
     </main>
 
@@ -719,6 +925,8 @@
       const LOCKED_HEART_RATE_HINT =
         "Из ссылки подставляется автоматически. Редактирование доступно только в открытом Control Center.";
       const AUTO_SYNC_MESSAGE = "Изменения синхронизируются автоматически.";
+      const PARENT_ROLE = "parent";
+      const KID_ROLE = "kid";
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       const form = document.getElementById("calculator");
@@ -744,10 +952,16 @@
       const subtractMinutesField = document.getElementById("subtractMinutes");
       const authEmailField = document.getElementById("authEmail");
       const authPasswordField = document.getElementById("authPassword");
+      const authRoleField = document.getElementById("authRole");
+      const familyCodeField = document.getElementById("familyCode");
+      const familyCodeHint = document.getElementById("familyCodeHint");
       const signUpButton = document.getElementById("signUpButton");
       const logInButton = document.getElementById("logInButton");
       const logOutButton = document.getElementById("logOutButton");
       const authStatus = document.getElementById("authStatus");
+      const profileSummary = document.getElementById("profileSummary");
+      const roleBadge = document.getElementById("roleBadge");
+      const familyBadge = document.getElementById("familyBadge");
 
       const earnedMinutes = document.getElementById("earnedMinutes");
       const balanceMinutes = document.getElementById("balanceMinutes");
@@ -763,6 +977,11 @@
       const ocrStatus = document.getElementById("ocrStatus");
       const detectedHeartRate = document.getElementById("detectedHeartRate");
       const detectedDuration = document.getElementById("detectedDuration");
+      const controlGate = document.getElementById("controlGate");
+      const spendCard = document.getElementById("spendCard");
+      const trendChart = document.getElementById("trendChart");
+      const calendarGrid = document.getElementById("calendarGrid");
+      const calendarMonthLabel = document.getElementById("calendarMonthLabel");
 
       let balance = 0;
       let ledger = [];
@@ -773,6 +992,7 @@
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
       let currentUser = null;
+      let currentProfile = null;
       let lastRemoteEntryCount = 0;
       let controlCenterOpen = false;
       let lastImportedUrl = "";
@@ -780,6 +1000,51 @@
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
         element.className = `${baseClass}${tone ? ` ${tone}` : ""}`;
+      }
+
+      function normalizeFamilyCode(value) {
+        return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      }
+
+      function generateFamilyCode() {
+        return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
+      }
+
+      function isKidMode() {
+        return currentProfile?.role === KID_ROLE;
+      }
+
+      function updateFamilyCodeHint() {
+        familyCodeHint.textContent = authRoleField.value === KID_ROLE
+          ? "Для kid введи код родителя, чтобы подключиться к общей семье."
+          : "Для parent оставь пустым. Код семьи появится после входа.";
+      }
+
+      function updateProfileSummary() {
+        if (!currentUser || !currentProfile) {
+          profileSummary.hidden = true;
+          return;
+        }
+
+        profileSummary.hidden = false;
+        roleBadge.textContent = currentProfile.role === KID_ROLE ? "Kid mode" : "Parent mode";
+        familyBadge.textContent = currentProfile.family_code
+          ? `Family code: ${currentProfile.family_code}`
+          : `Family linked: ${currentProfile.family_id.slice(0, 8).toUpperCase()}`;
+      }
+
+      function updateRoleUI() {
+        const kidMode = isKidMode();
+
+        if (kidMode && controlCenterOpen) {
+          setControlCenterState(false);
+        }
+
+        controlGate.hidden = kidMode;
+        spendCard.hidden = kidMode;
+        clearLogButton.hidden = kidMode;
+        subtractButton.hidden = kidMode;
+        updateProfileSummary();
       }
 
       function formatMinutes(value) {
@@ -905,6 +1170,86 @@
         }
       }
 
+      async function fetchOwnProfile(userId) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, family_id, family_code, role, display_name")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        return data;
+      }
+
+      async function findFamilyByCode(code) {
+        const { data, error } = await supabase.rpc("find_family_by_code", {
+          input_code: normalizeFamilyCode(code)
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        return Array.isArray(data) ? data[0]?.family_id || null : null;
+      }
+
+      async function ensureProfileForUser(user, options = {}) {
+        const existingProfile = await fetchOwnProfile(user.id);
+
+        if (existingProfile) {
+          currentProfile = existingProfile;
+          updateRoleUI();
+          return existingProfile;
+        }
+
+        const requestedRole = options.role || user.user_metadata?.requested_role || PARENT_ROLE;
+        const requestedFamilyCode = normalizeFamilyCode(
+          options.familyCode || user.user_metadata?.requested_family_code || ""
+        );
+
+        let familyId = user.id;
+        let familyCode = null;
+
+        if (requestedRole === KID_ROLE) {
+          if (!requestedFamilyCode) {
+            throw new Error("Для Kid аккаунта нужен семейный код.");
+          }
+
+          familyId = await findFamilyByCode(requestedFamilyCode);
+
+          if (!familyId) {
+            throw new Error("Семейный код не найден. Проверь код родителя.");
+          }
+        } else {
+          familyCode = requestedFamilyCode || generateFamilyCode();
+        }
+
+        const payload = {
+          id: user.id,
+          family_id: familyId,
+          family_code: familyCode,
+          role: requestedRole,
+          display_name: user.email ? user.email.split("@")[0] : requestedRole
+        };
+
+        const { data, error } = await supabase
+          .from("profiles")
+          .upsert(payload)
+          .select("id, family_id, family_code, role, display_name")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        currentProfile = data;
+        updateRoleUI();
+        return data;
+      }
+
       function setAuthStatus(message, tone) {
         const localCount = Array.isArray(ledger) ? ledger.length : 0;
         const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
@@ -926,19 +1271,20 @@
       }
 
       async function persistState() {
-        if (!currentUser) {
+        if (!currentUser || !currentProfile?.family_id) {
           return;
         }
 
         const payload = {
-          user_id: currentUser.id,
+          user_id: currentProfile.family_id,
+          family_id: currentProfile.family_id,
           ledger,
           coefficients: getCurrentCoefficients()
         };
 
         const { data, error } = await supabase
           .from("family_state")
-          .upsert(payload, { onConflict: "user_id" })
+          .upsert(payload, { onConflict: "family_id" })
           .select("ledger")
           .single();
 
@@ -952,14 +1298,14 @@
       }
 
       async function loadRemoteState() {
-        if (!currentUser) {
+        if (!currentUser || !currentProfile?.family_id) {
           return;
         }
 
         const { data, error } = await supabase
           .from("family_state")
           .select("ledger, coefficients")
-          .eq("user_id", currentUser.id)
+          .eq("family_id", currentProfile.family_id)
           .maybeSingle();
 
         if (error) {
@@ -1021,6 +1367,49 @@
         return "Без даты";
       }
 
+      function toDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function getLedgerByDay() {
+        return ledger.reduce(function (accumulator, entry) {
+          if (!entry.createdAt) {
+            return accumulator;
+          }
+
+          const entryDate = new Date(entry.createdAt);
+
+          if (Number.isNaN(entryDate.getTime())) {
+            return accumulator;
+          }
+
+          const key = toDateKey(entryDate);
+
+          if (!accumulator[key]) {
+            accumulator[key] = {
+              earned: 0,
+              spent: 0,
+              net: 0,
+              entries: 0
+            };
+          }
+
+          if (entry.type === "plus") {
+            accumulator[key].earned += entry.minutes;
+            accumulator[key].net += entry.minutes;
+          } else {
+            accumulator[key].spent += entry.minutes;
+            accumulator[key].net -= entry.minutes;
+          }
+
+          accumulator[key].entries += 1;
+          return accumulator;
+        }, {});
+      }
+
       function getStartOfWeek(date) {
         const copy = new Date(date);
         copy.setHours(0, 0, 0, 0);
@@ -1070,6 +1459,130 @@
         weeklyNet.textContent = formatMinutes(Math.max(stats.earned - stats.spent, 0));
       }
 
+      function renderTrendChart() {
+        const byDay = getLedgerByDay();
+        const days = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (let offset = 6; offset >= 0; offset -= 1) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - offset);
+          const key = toDateKey(date);
+          const summary = byDay[key] || { earned: 0, spent: 0 };
+          days.push({
+            key,
+            label: date.toLocaleDateString("ru-RU", { weekday: "short" }),
+            earned: summary.earned,
+            spent: summary.spent,
+            net: summary.earned - summary.spent
+          });
+        }
+
+        const maxValue = Math.max(
+          1,
+          ...days.flatMap(function (day) {
+            return [day.earned, day.spent];
+          })
+        );
+
+        trendChart.innerHTML = "";
+
+        days.forEach(function (day) {
+          const column = document.createElement("div");
+          column.className = "trend-column";
+
+          const bars = document.createElement("div");
+          bars.className = "trend-bars";
+
+          const earnedBar = document.createElement("div");
+          earnedBar.className = "trend-bar earned";
+          earnedBar.style.height = `${Math.max((day.earned / maxValue) * 100, day.earned ? 10 : 0)}%`;
+
+          const spentBar = document.createElement("div");
+          spentBar.className = "trend-bar spent";
+          spentBar.style.height = `${Math.max((day.spent / maxValue) * 100, day.spent ? 10 : 0)}%`;
+
+          const total = document.createElement("div");
+          total.className = "trend-total";
+          total.textContent = day.net > 0
+            ? `+${formatMinutes(day.net)}`
+            : day.net < 0
+              ? `-${formatMinutes(Math.abs(day.net))}`
+              : "0m";
+
+          const label = document.createElement("div");
+          label.className = "trend-day";
+          label.textContent = day.label;
+
+          bars.append(earnedBar, spentBar);
+          column.append(bars, total, label);
+          trendChart.append(column);
+        });
+      }
+
+      function renderCalendar() {
+        const byDay = getLedgerByDay();
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const startOffset = (firstDay.getDay() + 6) % 7;
+        const totalDays = lastDay.getDate();
+        const maxDayValue = Math.max(
+          1,
+          ...Object.values(byDay).map(function (summary) {
+            return Math.max(summary.earned, summary.spent);
+          })
+        );
+
+        calendarMonthLabel.textContent = today.toLocaleDateString("ru-RU", {
+          month: "long",
+          year: "numeric"
+        });
+        calendarGrid.innerHTML = "";
+
+        for (let blankIndex = 0; blankIndex < startOffset; blankIndex += 1) {
+          const blank = document.createElement("div");
+          blank.className = "calendar-cell empty-day";
+          calendarGrid.append(blank);
+        }
+
+        for (let dayNumber = 1; dayNumber <= totalDays; dayNumber += 1) {
+          const date = new Date(year, month, dayNumber);
+          const key = toDateKey(date);
+          const summary = byDay[key] || { earned: 0, spent: 0, net: 0 };
+          const value = Math.max(summary.earned, summary.spent);
+          const level = value ? Math.min(4, Math.ceil((value / maxDayValue) * 4)) : 0;
+
+          const cell = document.createElement("div");
+          cell.className = `calendar-cell${level ? ` level-${level}` : ""}`;
+
+          const dateLabel = document.createElement("div");
+          dateLabel.className = "calendar-date";
+          dateLabel.textContent = String(dayNumber);
+
+          cell.append(dateLabel);
+
+          if (summary.earned) {
+            const earned = document.createElement("div");
+            earned.className = "calendar-amount plus";
+            earned.textContent = `+${formatMinutes(summary.earned)}`;
+            cell.append(earned);
+          }
+
+          if (summary.spent) {
+            const spent = document.createElement("div");
+            spent.className = "calendar-amount minus";
+            spent.textContent = `-${formatMinutes(summary.spent)}`;
+            cell.append(spent);
+          }
+
+          calendarGrid.append(cell);
+        }
+      }
+
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
@@ -1117,6 +1630,14 @@
       }
 
       function setControlCenterState(isOpen) {
+        if (isKidMode()) {
+          controlCenterOpen = false;
+          controlPanel.hidden = true;
+          heartRateField.disabled = true;
+          heartRateHint.textContent = LOCKED_HEART_RATE_HINT;
+          return;
+        }
+
         controlCenterOpen = isOpen;
         controlPanel.hidden = !isOpen;
         heartRateField.disabled = !isOpen;
@@ -1128,6 +1649,8 @@
         balance = Math.max(0, computeBalanceFromLedger());
         balanceMinutes.textContent = formatMinutes(balance);
         renderWeeklyStats();
+        renderTrendChart();
+        renderCalendar();
         ledgerList.innerHTML = "";
 
         if (ledger.length === 0) {
@@ -1311,6 +1834,8 @@
 
       bindEvents([activityField, heartRateField, durationField, bonusField], updatePreview, ["input", "change"]);
 
+      authRoleField.addEventListener("change", updateFamilyCodeHint);
+
       activityUrlField.addEventListener("input", function () {
         if (activityUrlField.value.trim() !== lastImportedUrl) {
           lastImportedUrl = "";
@@ -1396,15 +1921,28 @@
         withButtonLoading(signUpButton, async function () {
           const email = authEmailField.value.trim();
           const password = authPasswordField.value;
+          const requestedRole = authRoleField.value;
+          const familyCode = normalizeFamilyCode(familyCodeField.value);
 
           if (!email || !password) {
             setAuthStatus("Введите email и пароль для регистрации.", "bad");
             return;
           }
 
+          if (requestedRole === KID_ROLE && !familyCode) {
+            setAuthStatus("Для Kid аккаунта введи семейный код родителя.", "bad");
+            return;
+          }
+
           const { data, error } = await supabase.auth.signUp({
             email,
-            password
+            password,
+            options: {
+              data: {
+                requested_role: requestedRole,
+                requested_family_code: familyCode || null
+              }
+            }
           });
 
           if (error) {
@@ -1415,7 +1953,15 @@
           currentUser = data.user || null;
           authPasswordField.value = "";
           if (currentUser) {
-            await loadRemoteState();
+            try {
+              await ensureProfileForUser(currentUser, {
+                role: requestedRole,
+                familyCode
+              });
+              await loadRemoteState();
+            } catch (profileError) {
+              setAuthStatus(profileError.message || "Не удалось подготовить семейный профиль.", "bad");
+            }
           } else {
             setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
           }
@@ -1444,7 +1990,12 @@
 
           currentUser = data.user;
           authPasswordField.value = "";
-          await loadRemoteState();
+          try {
+            await ensureProfileForUser(data.user);
+            await loadRemoteState();
+          } catch (profileError) {
+            setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+          }
         });
       });
 
@@ -1452,10 +2003,20 @@
         withButtonLoading(logOutButton, async function () {
           await supabase.auth.signOut();
           currentUser = null;
+          currentProfile = null;
           lastRemoteEntryCount = 0;
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
+          updateRoleUI();
         });
       });
+
+      loadCoefficients();
+      loadLedger();
+      updateFamilyCodeHint();
+      setControlCenterState(false);
+      updateDetectedDisplay();
+      updatePreview();
+      renderLedger();
 
       const {
         data: { session }
@@ -1464,10 +2025,16 @@
       if (session?.user) {
         currentUser = session.user;
         authEmailField.value = session.user.email || "";
-        await loadRemoteState();
+        try {
+          await ensureProfileForUser(session.user);
+          await loadRemoteState();
+        } catch (profileError) {
+          setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+        }
       } else {
         lastRemoteEntryCount = 0;
         setAuthStatus(DEFAULT_AUTH_STATUS, "");
+        updateRoleUI();
       }
 
       supabase.auth.onAuthStateChange(async function (_event, sessionState) {
@@ -1475,19 +2042,19 @@
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
-          await loadRemoteState();
+          try {
+            await ensureProfileForUser(currentUser);
+            await loadRemoteState();
+          } catch (profileError) {
+            setAuthStatus(profileError.message || "Не удалось загрузить семейный профиль.", "bad");
+          }
         } else {
+          currentProfile = null;
           lastRemoteEntryCount = 0;
           setAuthStatus(DEFAULT_AUTH_STATUS, "");
+          updateRoleUI();
         }
       });
-
-      loadCoefficients();
-      loadLedger();
-      setControlCenterState(false);
-      updateDetectedDisplay();
-      updatePreview();
-      renderLedger();
     </script>
   </body>
 </html>
