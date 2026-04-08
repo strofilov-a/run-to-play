@@ -233,6 +233,31 @@
         line-height: 1.55;
       }
 
+      .stats-grid {
+        margin-top: 1rem;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .stat-chip {
+        padding: 0.9rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(67, 42, 23, 0.08);
+      }
+
+      .stat-chip strong {
+        display: block;
+        font-size: 1.2rem;
+        letter-spacing: -0.04em;
+      }
+
+      .stat-chip span {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
       .note {
         margin-top: 1rem;
         padding: 0.95rem 1rem;
@@ -411,6 +436,21 @@
         font-size: 0.92rem;
       }
 
+      .ledger-source {
+        display: inline-flex;
+        width: fit-content;
+        margin-top: 0.1rem;
+        color: #9f4715;
+        font-size: 0.88rem;
+        font-weight: 700;
+        text-decoration: none;
+        word-break: break-all;
+      }
+
+      .ledger-source:hover {
+        text-decoration: underline;
+      }
+
       .ledger-time {
         display: inline-flex;
         width: fit-content;
@@ -453,7 +493,8 @@
 
       @media (max-width: 720px) {
         .grid,
-        .ocr-result {
+        .ocr-result,
+        .stats-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -631,6 +672,25 @@
           </div>
 
           <div class="summary">
+            <p class="kicker">Эта неделя</p>
+            <p class="summary-copy" id="weeklyRange">Текущая неделя.</p>
+            <div class="stats-grid">
+              <div class="stat-chip">
+                <strong id="weeklyEarned">0m</strong>
+                <span>Заработано</span>
+              </div>
+              <div class="stat-chip">
+                <strong id="weeklySpent">0m</strong>
+                <span>Потрачено</span>
+              </div>
+              <div class="stat-chip">
+                <strong id="weeklyNet">0m</strong>
+                <span>Итог недели</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="summary">
             <p class="kicker">Списать минуты</p>
             <div class="field" style="margin-top: 0.9rem;">
               <label for="subtractMinutes">Сколько потратили</label>
@@ -696,6 +756,10 @@
       const balanceMinutes = document.getElementById("balanceMinutes");
       const ledgerList = document.getElementById("ledgerList");
       const emptyState = document.getElementById("emptyState");
+      const weeklyRange = document.getElementById("weeklyRange");
+      const weeklyEarned = document.getElementById("weeklyEarned");
+      const weeklySpent = document.getElementById("weeklySpent");
+      const weeklyNet = document.getElementById("weeklyNet");
 
       const activityUrlField = document.getElementById("activityUrl");
       const fetchLinkButton = document.getElementById("fetchLinkButton");
@@ -714,6 +778,7 @@
       let currentUser = null;
       let lastRemoteEntryCount = 0;
       let controlCenterOpen = false;
+      let lastImportedUrl = "";
 
       function formatMinutes(value) {
         const rounded = Math.max(0, Math.round(value));
@@ -947,6 +1012,55 @@
         return "Без даты";
       }
 
+      function getStartOfWeek(date) {
+        const copy = new Date(date);
+        copy.setHours(0, 0, 0, 0);
+        const day = copy.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        copy.setDate(copy.getDate() + diff);
+        return copy;
+      }
+
+      function getWeeklyStats() {
+        const now = new Date();
+        const start = getStartOfWeek(now);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 7);
+
+        return ledger.reduce(function (summary, entry) {
+          const createdAt = entry.createdAt ? new Date(entry.createdAt) : null;
+
+          if (!createdAt || Number.isNaN(createdAt.getTime()) || createdAt < start || createdAt >= end) {
+            return summary;
+          }
+
+          if (entry.type === "plus") {
+            summary.earned += entry.minutes;
+          } else {
+            summary.spent += entry.minutes;
+          }
+
+          return summary;
+        }, {
+          start,
+          end,
+          earned: 0,
+          spent: 0
+        });
+      }
+
+      function renderWeeklyStats() {
+        const stats = getWeeklyStats();
+        const rangeEnd = new Date(stats.end);
+        rangeEnd.setDate(rangeEnd.getDate() - 1);
+        weeklyRange.textContent =
+          `${stats.start.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}` +
+          ` - ${rangeEnd.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}`;
+        weeklyEarned.textContent = formatMinutes(stats.earned);
+        weeklySpent.textContent = formatMinutes(stats.spent);
+        weeklyNet.textContent = formatMinutes(Math.max(stats.earned - stats.spent, 0));
+      }
+
       function calculateSession() {
         const activity = activityField.value;
         const heartRate = Number(heartRateField.value) || 0;
@@ -988,6 +1102,7 @@
       function renderLedger() {
         balance = Math.max(0, computeBalanceFromLedger());
         balanceMinutes.textContent = formatMinutes(balance);
+        renderWeeklyStats();
         ledgerList.innerHTML = "";
 
         if (ledger.length === 0) {
@@ -1038,6 +1153,16 @@
             meta.className = "ledger-meta";
             meta.textContent = entry.meta;
 
+            const source = entry.sourceUrl ? document.createElement("a") : null;
+
+            if (source) {
+              source.className = "ledger-source";
+              source.href = entry.sourceUrl;
+              source.target = "_blank";
+              source.rel = "noreferrer";
+              source.textContent = "Источник активности";
+            }
+
             const time = document.createElement("div");
             time.className = "ledger-time";
             time.textContent = entry.timestamp;
@@ -1057,9 +1182,17 @@
                 renderLedger();
                 setOcrStatus("Запись удалена. Изменения синхронизируются автоматически.", "good");
               });
-              item.append(top, meta, time, deleteButton);
+              item.append(top, meta);
+              if (source) {
+                item.append(source);
+              }
+              item.append(time, deleteButton);
             } else {
-              item.append(top, meta, time);
+              item.append(top, meta);
+              if (source) {
+                item.append(source);
+              }
+              item.append(time);
             }
 
             dayList.append(item);
@@ -1087,7 +1220,8 @@
             `${session.duration} min at ${session.heartRate} bpm` +
             `${session.bonus ? ` + ${session.bonus} bonus` : ""}`,
           timestamp: `Added ${getTimestampLabel()}`,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          sourceUrl: lastImportedUrl || ""
         });
 
         setOcrStatus("Запись добавлена. Изменения синхронизируются автоматически.", "good");
@@ -1119,6 +1253,7 @@
         const url = activityUrlField.value.trim();
 
         if (!url) {
+          lastImportedUrl = "";
           setOcrStatus("Сначала вставьте ссылку на активность.", "bad");
           return;
         }
@@ -1135,6 +1270,7 @@
 
           detectedValues.heartRate = payload.heartRate;
           detectedValues.durationMinutes = payload.durationMinutes;
+          lastImportedUrl = url;
           updateDetectedDisplay();
           applyDetectedValues();
 
@@ -1145,6 +1281,7 @@
           updatePreview();
           setOcrStatus("Готово. Значения получены из ссылки и подставлены в конвертер.", "good");
         } catch (error) {
+          lastImportedUrl = "";
           setOcrStatus(error.message || "Не удалось разобрать ссылку активности.", "bad");
           return;
         }
@@ -1158,6 +1295,12 @@
       [activityField, heartRateField, durationField, bonusField].forEach(function (field) {
         field.addEventListener("input", updatePreview);
         field.addEventListener("change", updatePreview);
+      });
+
+      activityUrlField.addEventListener("input", function () {
+        if (activityUrlField.value.trim() !== lastImportedUrl) {
+          lastImportedUrl = "";
+        }
       });
 
       [runningCoefficientField, cyclingCoefficientField, gymCoefficientField].forEach(function (field) {
@@ -1215,6 +1358,7 @@
         durationField.value = "0";
         bonusField.value = "0";
         subtractMinutesField.value = "0";
+        lastImportedUrl = "";
         loadCoefficients();
         updatePreview();
       });
