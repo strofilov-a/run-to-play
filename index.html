@@ -1110,6 +1110,12 @@
         setStatus(authStatus, "auth-status", `${message}${cloudPart}`, tone);
       }
 
+      function runWithButtonLoading(button, action) {
+        return function () {
+          withButtonLoading(button, action);
+        };
+      }
+
       async function withButtonLoading(button, action) {
         button.disabled = true;
         button.classList.add("is-loading");
@@ -1200,6 +1206,21 @@
         renderLedger();
         updatePreview();
         setAuthStatus(`Вы вошли как ${currentUser.email}. Показаны общие данные семьи из облака.`, "good");
+      }
+
+      async function syncCurrentSession(sessionUser) {
+        currentUser = sessionUser || null;
+        parentUnlocked = false;
+
+        if (currentUser) {
+          authEmailField.value = currentUser.email || "";
+          await loadRemoteState();
+          return;
+        }
+
+        lastRemoteEntryCount = 0;
+        setAuthStatus(DEFAULT_AUTH_STATUS, "");
+        updateRoleUI();
       }
 
       function computeBalanceFromLedger() {
@@ -1696,20 +1717,15 @@
       bindEvents([runningCoefficientField, cyclingCoefficientField, gymCoefficientField], updatePreview, ["input", "change"]);
       bindEvents([runningCoefficientField, cyclingCoefficientField, gymCoefficientField], saveCoefficients, ["input", "change"]);
 
-      addButton.addEventListener("click", function () {
-        withButtonLoading(addButton, async function () {
+      addButton.addEventListener("click", runWithButtonLoading(addButton, async function () {
           addCurrentSessionToLog();
-        });
-      });
+      }));
 
-      quickAddButton.addEventListener("click", function () {
-        withButtonLoading(quickAddButton, async function () {
+      quickAddButton.addEventListener("click", runWithButtonLoading(quickAddButton, async function () {
           addCurrentSessionToLog();
-        });
-      });
+      }));
 
-      subtractButton.addEventListener("click", function () {
-        withButtonLoading(subtractButton, async function () {
+      subtractButton.addEventListener("click", runWithButtonLoading(subtractButton, async function () {
           const subtractMinutes = Math.max(parseMinutesInput(subtractMinutesField.value), 0);
 
           if (!subtractMinutes) {
@@ -1727,8 +1743,7 @@
           }));
 
           setOcrStatus(`Минуты списаны. ${AUTO_SYNC_MESSAGE}`, "good");
-        });
-      });
+      }));
 
       clearLogButton.addEventListener("click", function () {
         ledger = [];
@@ -1768,12 +1783,9 @@
         setControlCenterState(false);
       });
 
-      fetchLinkButton.addEventListener("click", function () {
-        withButtonLoading(fetchLinkButton, fetchActivityFromLink);
-      });
+      fetchLinkButton.addEventListener("click", runWithButtonLoading(fetchLinkButton, fetchActivityFromLink));
 
-      signUpButton.addEventListener("click", function () {
-        withButtonLoading(signUpButton, async function () {
+      signUpButton.addEventListener("click", runWithButtonLoading(signUpButton, async function () {
           const email = authEmailField.value.trim();
           const password = authPasswordField.value;
 
@@ -1799,11 +1811,9 @@
           } else {
             setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
           }
-        });
-      });
+      }));
 
-      logInButton.addEventListener("click", function () {
-        withButtonLoading(logInButton, async function () {
+      logInButton.addEventListener("click", runWithButtonLoading(logInButton, async function () {
           const email = authEmailField.value.trim();
           const password = authPasswordField.value;
 
@@ -1826,19 +1836,16 @@
           parentUnlocked = false;
           authPasswordField.value = "";
           await loadRemoteState();
-        });
-      });
+      }));
 
-      logOutButton.addEventListener("click", function () {
-        withButtonLoading(logOutButton, async function () {
+      logOutButton.addEventListener("click", runWithButtonLoading(logOutButton, async function () {
           await supabase.auth.signOut();
           currentUser = null;
           lastRemoteEntryCount = 0;
           parentUnlocked = false;
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
           updateRoleUI();
-        });
-      });
+      }));
 
       loadCoefficients();
       loadLedger();
@@ -1851,29 +1858,10 @@
         data: { session }
       } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        currentUser = session.user;
-        parentUnlocked = false;
-        authEmailField.value = session.user.email || "";
-        await loadRemoteState();
-      } else {
-        lastRemoteEntryCount = 0;
-        setAuthStatus(DEFAULT_AUTH_STATUS, "");
-        updateRoleUI();
-      }
+      await syncCurrentSession(session?.user || null);
 
       supabase.auth.onAuthStateChange(async function (_event, sessionState) {
-        currentUser = sessionState?.user || null;
-        parentUnlocked = false;
-
-        if (currentUser) {
-          authEmailField.value = currentUser.email || "";
-          await loadRemoteState();
-        } else {
-          lastRemoteEntryCount = 0;
-          setAuthStatus(DEFAULT_AUTH_STATUS, "");
-          updateRoleUI();
-        }
+        await syncCurrentSession(sessionState?.user || null);
       });
     </script>
   </body>
