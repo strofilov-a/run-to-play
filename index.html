@@ -980,19 +980,21 @@
       }
 
       function formatMinutes(value) {
-        const rounded = Math.max(0, Math.round(value));
-        const hours = Math.floor(rounded / 60);
-        const minutes = rounded % 60;
+        const rounded = Math.round(value);
+        const absolute = Math.abs(rounded);
+        const hours = Math.floor(absolute / 60);
+        const minutes = absolute % 60;
+        const sign = rounded < 0 ? "-" : "";
 
         if (hours && minutes) {
-          return `${hours}h ${minutes}m`;
+          return `${sign}${hours}h ${minutes}m`;
         }
 
         if (hours) {
-          return `${hours}h`;
+          return `${sign}${hours}h`;
         }
 
-        return `${minutes}m`;
+        return `${sign}${minutes}m`;
       }
 
       function parseMinutesInput(value) {
@@ -1307,7 +1309,7 @@
           ` - ${rangeEnd.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}`;
         weeklyEarned.textContent = formatMinutes(stats.earned);
         weeklySpent.textContent = formatMinutes(stats.spent);
-        weeklyNet.textContent = formatMinutes(Math.max(stats.earned - stats.spent, 0));
+        weeklyNet.textContent = formatMinutes(stats.earned - stats.spent);
       }
 
       function renderTrendChart() {
@@ -1497,7 +1499,7 @@
       }
 
       function renderLedger() {
-        balance = Math.max(0, computeBalanceFromLedger());
+        balance = computeBalanceFromLedger();
         balanceMinutes.textContent = formatMinutes(balance);
         renderWeeklyStats();
         renderTrendChart();
@@ -1714,13 +1716,13 @@
             return;
           }
 
-          const spent = Math.min(balance, Math.round(subtractMinutes));
+          const spent = Math.round(subtractMinutes);
 
           addLedgerEntry(createLedgerEntry({
             type: "minus",
             title: "Gameplay used",
             minutes: spent,
-            meta: spent === Math.round(subtractMinutes) ? "Minutes removed from balance" : "Balance reached zero",
+            meta: "Minutes removed from balance",
             timestamp: `Subtracted ${getTimestampLabel()}`
           }));
 
