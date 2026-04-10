@@ -153,7 +153,7 @@ async function fetchSupabase(path, options = {}) {
   return response;
 }
 
-async function resolveUserIdByEmail(email) {
+async function fetchAuthUsers() {
   const pageResponse = await fetchSupabase("/auth/v1/admin/users?page=1&per_page=1000", {
     method: "GET"
   });
@@ -164,8 +164,22 @@ async function resolveUserIdByEmail(email) {
   }
 
   const payload = await pageResponse.json();
-  const users = Array.isArray(payload?.users) ? payload.users : [];
+  return Array.isArray(payload?.users) ? payload.users : [];
+}
+
+async function resolveUserIdByEmail(email) {
+  const users = await fetchAuthUsers();
   const match = users.find((user) => String(user.email || "").toLowerCase() === email.toLowerCase());
+
+  return match?.id || null;
+}
+
+async function resolveUserIdByWebhookSecret(secret) {
+  const users = await fetchAuthUsers();
+  const match = users.find((user) => {
+    const metadata = user.user_metadata || user.raw_user_meta_data || {};
+    return metadata.webhook_secret === secret;
+  });
 
   return match?.id || null;
 }
@@ -240,9 +254,9 @@ export default async function handler(request, response) {
   const webhookSecret = getEnv("WEBHOOK_SECRET");
   const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!webhookSecret || !serviceRoleKey) {
+  if (!serviceRoleKey) {
     json(response, 500, {
-      error: "Webhook is not configured yet. Add WEBHOOK_SECRET and SUPABASE_SERVICE_ROLE_KEY in Vercel."
+      error: "Webhook is not configured yet. Add SUPABASE_SERVICE_ROLE_KEY in Vercel."
     });
     return;
   }
@@ -261,15 +275,19 @@ export default async function handler(request, response) {
     request.headers["x-run-to-play-secret"] ||
     payload.secret;
 
-  if (providedSecret !== webhookSecret) {
-    json(response, 401, { error: "Invalid webhook secret." });
+  if (!providedSecret) {
+    json(response, 401, { error: "Missing webhook secret." });
     return;
   }
 
-  const userId = await resolveTargetUserId(payload);
+  let userId = await resolveUserIdByWebhookSecret(providedSecret);
+
+  if (!userId && webhookSecret && providedSecret === webhookSecret) {
+    userId = await resolveTargetUserId(payload);
+  }
 
   if (!userId) {
-    json(response, 400, { error: "Provide a valid userId, email, WEBHOOK_TARGET_USER_ID, or WEBHOOK_TARGET_EMAIL." });
+    json(response, 401, { error: "Invalid webhook secret." });
     return;
   }
 

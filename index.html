@@ -760,6 +760,15 @@
                 <button class="danger" id="clearLogButton" type="button">Очистить лог</button>
               </div>
 
+              <div class="field full" style="margin-bottom: 1rem;">
+                <label for="webhookSecretField">Webhook secret</label>
+                <div class="actions">
+                  <input id="webhookSecretField" type="text" readonly value="" placeholder="Secret появится после входа" />
+                  <button class="secondary" id="copyWebhookSecretButton" type="button">Copy</button>
+                </div>
+                <span class="hint">Этот secret нужен для автоматического начисления тренировок через webhook.</span>
+              </div>
+
               <form id="calculator">
                 <div class="grid">
                   <div class="field full">
@@ -913,6 +922,8 @@
       const unlockButton = document.getElementById("unlockButton");
       const closeControlButton = document.getElementById("closeControlButton");
       const controlPanel = document.getElementById("controlPanel");
+      const webhookSecretField = document.getElementById("webhookSecretField");
+      const copyWebhookSecretButton = document.getElementById("copyWebhookSecretButton");
       const activityField = document.getElementById("activity");
       const heartRateField = document.getElementById("heartRate");
       const heartRateHint = document.getElementById("heartRateHint");
@@ -985,6 +996,7 @@
       let clearLogArmed = false;
       let clearLogTimeoutId = null;
       let authMode = "choice";
+      let currentWebhookSecret = "";
 
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
@@ -1186,6 +1198,52 @@
         renderAuthFlow();
       }
 
+      function renderWebhookSecret() {
+        webhookSecretField.value = currentWebhookSecret || "";
+        copyWebhookSecretButton.disabled = !currentWebhookSecret;
+      }
+
+      function createWebhookSecret() {
+        const bytes = new Uint8Array(12);
+        crypto.getRandomValues(bytes);
+        return `r2p_${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+      }
+
+      async function ensureWebhookSecret() {
+        if (!currentUser) {
+          currentWebhookSecret = "";
+          renderWebhookSecret();
+          return "";
+        }
+
+        const existingSecret = currentUser.user_metadata?.webhook_secret || "";
+
+        if (existingSecret) {
+          currentWebhookSecret = existingSecret;
+          renderWebhookSecret();
+          return existingSecret;
+        }
+
+        const generatedSecret = createWebhookSecret();
+        const nextMetadata = {
+          ...(currentUser.user_metadata || {}),
+          webhook_secret: generatedSecret
+        };
+        const { data, error } = await supabase.auth.updateUser({ data: nextMetadata });
+
+        if (error) {
+          setAuthStatus("Не удалось создать webhook secret для аккаунта.", "bad");
+          currentWebhookSecret = "";
+          renderWebhookSecret();
+          return "";
+        }
+
+        currentUser = data.user || currentUser;
+        currentWebhookSecret = currentUser.user_metadata?.webhook_secret || generatedSecret;
+        renderWebhookSecret();
+        return currentWebhookSecret;
+      }
+
       function runWithButtonLoading(button, action) {
         return function () {
           withButtonLoading(button, action);
@@ -1356,11 +1414,14 @@
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
+          await ensureWebhookSecret();
           renderAuthFlow();
           await loadRemoteState();
           return;
         }
 
+        currentWebhookSecret = "";
+        renderWebhookSecret();
         renderAuthFlow();
         lastRemoteEntryCount = 0;
         openAuthMode("choice");
@@ -1952,6 +2013,19 @@
         setControlCenterState(false);
       });
 
+      copyWebhookSecretButton.addEventListener("click", async function () {
+        if (!currentWebhookSecret) {
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(currentWebhookSecret);
+          setOcrStatus("Webhook secret скопирован.", "good");
+        } catch {
+          setOcrStatus("Не удалось скопировать webhook secret.", "bad");
+        }
+      });
+
       fetchLinkButton.addEventListener("click", runWithButtonLoading(fetchLinkButton, fetchActivityFromLink));
 
       chooseSignUpButton.addEventListener("click", function () {
@@ -1993,12 +2067,14 @@
               return;
             }
 
+            const generatedSecret = createWebhookSecret();
             const { data, error } = await supabase.auth.signUp({
               email,
               password,
               options: {
                 data: {
-                  s10_profile_url: profileUrl
+                  s10_profile_url: profileUrl,
+                  webhook_secret: generatedSecret
                 }
               }
             });
@@ -2009,6 +2085,8 @@
             }
 
             currentUser = data.user || null;
+            currentWebhookSecret = data.user?.user_metadata?.webhook_secret || generatedSecret;
+            renderWebhookSecret();
             authPasswordField.value = "";
             if (currentUser) {
               await loadRemoteState();
@@ -2038,6 +2116,8 @@
       logOutButton.addEventListener("click", runWithButtonLoading(logOutButton, async function () {
           await supabase.auth.signOut();
           currentUser = null;
+          currentWebhookSecret = "";
+          renderWebhookSecret();
           lastRemoteEntryCount = 0;
           parentUnlocked = false;
           resetClearLogConfirmation();
@@ -2048,6 +2128,7 @@
 
       loadCoefficients();
       loadLedger();
+      renderWebhookSecret();
       openAuthMode("choice");
       setControlCenterState(false);
       updateDetectedDisplay();
