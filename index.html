@@ -1172,6 +1172,7 @@
         authFormStep.hidden = !showingForm;
         authLoggedInActions.hidden = !loggedIn;
         authProfileFieldWrap.hidden = !isSignUp;
+        authProfileFieldWrap.style.display = isSignUp ? "block" : "none";
         authModeTitle.textContent = isSignUp ? "Sign Up" : "Sign In";
         authSubmitButton.textContent = isSignUp ? "Create account" : "Log In";
       }
