@@ -3,18 +3,35 @@ function json(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function extractLatestActivityId(html) {
-  const matches = Array.from(html.matchAll(/"id"\s*:\s*"(g\d{6,})"/gi));
+function dedupeIds(matches) {
   const uniqueIds = [];
 
   for (const match of matches) {
     const id = match[1];
-    if (!uniqueIds.includes(id)) {
+    if (id && !uniqueIds.includes(id)) {
       uniqueIds.push(id);
     }
   }
 
-  return uniqueIds[0] || null;
+  return uniqueIds;
+}
+
+function extractLatestActivityId(html) {
+  const patterns = [
+    /"id"\s*:\s*"(g\d{6,})"/gi,
+    /"activity"\s*:\s*"(g\d{6,})"/gi,
+    /activity\s*#(g\d{6,})/gi,
+    /\b(g\d{10,})\b/g
+  ];
+
+  for (const pattern of patterns) {
+    const ids = dedupeIds(Array.from(html.matchAll(pattern)));
+    if (ids.length) {
+      return ids[0];
+    }
+  }
+
+  return null;
 }
 
 export default async function handler(request, response) {
