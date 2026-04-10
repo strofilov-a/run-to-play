@@ -653,20 +653,42 @@
       <section class="auth-shell">
         <section class="card auth-card">
           <h2 class="section-title">Общий доступ через интернет</h2>
-          <div class="grid">
-            <div class="field">
-              <label for="authEmail">Email</label>
-              <input id="authEmail" type="email" placeholder="parent@example.com" />
-            </div>
-            <div class="field">
-              <label for="authPassword">Пароль</label>
-              <input id="authPassword" type="password" placeholder="Введите пароль" />
+
+          <div class="auth-step" id="authChoiceStep">
+            <p class="summary-copy">Выбери действие, а потом мы покажем нужную форму.</p>
+            <div class="actions">
+              <button class="primary" id="chooseSignUpButton" type="button">Sign Up</button>
+              <button class="success" id="chooseSignInButton" type="button">Sign In</button>
             </div>
           </div>
 
-          <div class="actions">
-            <button class="primary" id="signUpButton" type="button">Sign Up</button>
-            <button class="success" id="logInButton" type="button">Log In</button>
+          <div class="auth-step" id="authFormStep" hidden>
+            <div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+              <button class="secondary" id="authBackButton" type="button">Back</button>
+              <strong id="authModeTitle">Sign Up</strong>
+            </div>
+
+            <div class="grid">
+              <div class="field">
+                <label for="authEmail">Email</label>
+                <input id="authEmail" type="email" placeholder="parent@example.com" />
+              </div>
+              <div class="field">
+                <label for="authPassword">Пароль</label>
+                <input id="authPassword" type="password" placeholder="Введите пароль" />
+              </div>
+              <div class="field full" id="authProfileFieldWrap">
+                <label for="authProfileUrl">Ссылка на профиль S10</label>
+                <input id="authProfileUrl" type="url" placeholder="https://s10.run/student?..." />
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="primary" id="authSubmitButton" type="button">Create account</button>
+            </div>
+          </div>
+
+          <div class="actions" id="authLoggedInActions" hidden>
             <button class="secondary" id="logOutButton" type="button">Log Out</button>
           </div>
 
@@ -907,10 +929,18 @@
       const subtractButton = document.getElementById("subtractButton");
       const clearLogButton = document.getElementById("clearLogButton");
       const subtractMinutesField = document.getElementById("subtractMinutes");
+      const authChoiceStep = document.getElementById("authChoiceStep");
+      const authFormStep = document.getElementById("authFormStep");
+      const authLoggedInActions = document.getElementById("authLoggedInActions");
+      const authModeTitle = document.getElementById("authModeTitle");
+      const authProfileFieldWrap = document.getElementById("authProfileFieldWrap");
       const authEmailField = document.getElementById("authEmail");
       const authPasswordField = document.getElementById("authPassword");
-      const signUpButton = document.getElementById("signUpButton");
-      const logInButton = document.getElementById("logInButton");
+      const authProfileUrlField = document.getElementById("authProfileUrl");
+      const chooseSignUpButton = document.getElementById("chooseSignUpButton");
+      const chooseSignInButton = document.getElementById("chooseSignInButton");
+      const authBackButton = document.getElementById("authBackButton");
+      const authSubmitButton = document.getElementById("authSubmitButton");
       const logOutButton = document.getElementById("logOutButton");
       const authStatus = document.getElementById("authStatus");
 
@@ -954,6 +984,7 @@
       let parentUnlocked = false;
       let clearLogArmed = false;
       let clearLogTimeoutId = null;
+      let authMode = "choice";
 
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
@@ -1132,6 +1163,28 @@
         setStatus(authStatus, "auth-status", `${message}${cloudPart}`, tone);
       }
 
+      function renderAuthFlow() {
+        const loggedIn = Boolean(currentUser);
+        const showingForm = !loggedIn && (authMode === "signup" || authMode === "signin");
+        const isSignUp = authMode === "signup";
+
+        authChoiceStep.hidden = loggedIn || showingForm;
+        authFormStep.hidden = !showingForm;
+        authLoggedInActions.hidden = !loggedIn;
+        authProfileFieldWrap.hidden = !isSignUp;
+        authModeTitle.textContent = isSignUp ? "Sign Up" : "Sign In";
+        authSubmitButton.textContent = isSignUp ? "Create account" : "Log In";
+      }
+
+      function openAuthMode(mode) {
+        authMode = mode;
+        authPasswordField.value = "";
+        if (mode !== "signup") {
+          authProfileUrlField.value = "";
+        }
+        renderAuthFlow();
+      }
+
       function runWithButtonLoading(button, action) {
         return function () {
           withButtonLoading(button, action);
@@ -1302,11 +1355,14 @@
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
+          renderAuthFlow();
           await loadRemoteState();
           return;
         }
 
+        renderAuthFlow();
         lastRemoteEntryCount = 0;
+        openAuthMode("choice");
         setAuthStatus(DEFAULT_AUTH_STATUS, "");
         updateRoleUI();
       }
@@ -1897,40 +1953,57 @@
 
       fetchLinkButton.addEventListener("click", runWithButtonLoading(fetchLinkButton, fetchActivityFromLink));
 
-      signUpButton.addEventListener("click", runWithButtonLoading(signUpButton, async function () {
+      chooseSignUpButton.addEventListener("click", function () {
+        openAuthMode("signup");
+      });
+
+      chooseSignInButton.addEventListener("click", function () {
+        openAuthMode("signin");
+      });
+
+      authBackButton.addEventListener("click", function () {
+        openAuthMode("choice");
+      });
+
+      authSubmitButton.addEventListener("click", runWithButtonLoading(authSubmitButton, async function () {
           const email = authEmailField.value.trim();
           const password = authPasswordField.value;
+          const profileUrl = authProfileUrlField.value.trim();
 
           if (!email || !password) {
-            setAuthStatus("Введите email и пароль для регистрации.", "bad");
+            setAuthStatus(authMode === "signup" ? "Введите email и пароль для регистрации." : "Введите email и пароль для входа.", "bad");
             return;
           }
 
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password
-          });
+          if (authMode === "signup") {
+            if (!profileUrl) {
+              setAuthStatus("Добавьте ссылку на профиль S10 для регистрации.", "bad");
+              return;
+            }
 
-          if (error) {
-            setAuthStatus(error.message, "bad");
-            return;
-          }
+            const { data, error } = await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  s10_profile_url: profileUrl
+                }
+              }
+            });
 
-          currentUser = data.user || null;
-          authPasswordField.value = "";
-          if (currentUser) {
-            await loadRemoteState();
-          } else {
-            setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
-          }
-      }));
+            if (error) {
+              setAuthStatus(error.message, "bad");
+              return;
+            }
 
-      logInButton.addEventListener("click", runWithButtonLoading(logInButton, async function () {
-          const email = authEmailField.value.trim();
-          const password = authPasswordField.value;
-
-          if (!email || !password) {
-            setAuthStatus("Введите email и пароль для входа.", "bad");
+            currentUser = data.user || null;
+            authPasswordField.value = "";
+            if (currentUser) {
+              await loadRemoteState();
+            } else {
+              setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
+              openAuthMode("signin");
+            }
             return;
           }
 
@@ -1956,12 +2029,14 @@
           lastRemoteEntryCount = 0;
           parentUnlocked = false;
           resetClearLogConfirmation();
+          openAuthMode("choice");
           setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
           updateRoleUI();
       }));
 
       loadCoefficients();
       loadLedger();
+      openAuthMode("choice");
       setControlCenterState(false);
       updateDetectedDisplay();
       updatePreview();
