@@ -5,6 +5,7 @@ const DEFAULT_COEFFICIENTS = {
   Gym: 250
 };
 const DEFAULT_WEBHOOK_TARGET_EMAIL = "strofilov.a@icloud.com";
+const DEFAULT_WEBHOOK_TARGET_USER_ID = "148b597f-4481-45be-99fd-e37a25a8deda";
 
 function json(response, statusCode, payload) {
   response.status(statusCode).setHeader("content-type", "application/json; charset=utf-8");
@@ -169,6 +170,29 @@ async function resolveUserIdByEmail(email) {
   return match?.id || null;
 }
 
+async function resolveTargetUserId(payload) {
+  const userIdFromBody = typeof payload.userId === "string" ? payload.userId.trim() : "";
+
+  if (userIdFromBody) {
+    return userIdFromBody;
+  }
+
+  const configuredUserId = getEnv("WEBHOOK_TARGET_USER_ID", DEFAULT_WEBHOOK_TARGET_USER_ID);
+
+  if (configuredUserId) {
+    return configuredUserId;
+  }
+
+  const email = typeof payload.email === "string" ? payload.email.trim() : "";
+  const targetEmail = email || getEnv("WEBHOOK_TARGET_EMAIL", DEFAULT_WEBHOOK_TARGET_EMAIL);
+
+  if (!targetEmail) {
+    return null;
+  }
+
+  return resolveUserIdByEmail(targetEmail);
+}
+
 async function loadFamilyState(userId) {
   const response = await fetchSupabase(`/rest/v1/family_state?user_id=eq.${encodeURIComponent(userId)}&select=user_id,ledger,coefficients`, {
     method: "GET"
@@ -241,13 +265,10 @@ export default async function handler(request, response) {
     return;
   }
 
-  const email = typeof payload.email === "string" ? payload.email.trim() : "";
-  const userIdFromBody = typeof payload.userId === "string" ? payload.userId.trim() : "";
-  const targetEmail = email || getEnv("WEBHOOK_TARGET_EMAIL", DEFAULT_WEBHOOK_TARGET_EMAIL);
-  const userId = userIdFromBody || (targetEmail ? await resolveUserIdByEmail(targetEmail) : null);
+  const userId = await resolveTargetUserId(payload);
 
   if (!userId) {
-    json(response, 400, { error: "Provide a valid userId, email, or WEBHOOK_TARGET_EMAIL." });
+    json(response, 400, { error: "Provide a valid userId, email, WEBHOOK_TARGET_USER_ID, or WEBHOOK_TARGET_EMAIL." });
     return;
   }
 
@@ -306,7 +327,6 @@ export default async function handler(request, response) {
       ok: true,
       duplicate: false,
       userId,
-      targetEmail,
       sourceId,
       activity,
       bpm,

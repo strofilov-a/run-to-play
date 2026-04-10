@@ -942,8 +942,12 @@
       };
       const COEFFICIENT_STORAGE_KEY = "run-to-play-coefficients";
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
+      const SYNC_DEBOUNCE_MS = 700;
       let currentUser = null;
       let lastRemoteEntryCount = 0;
+      let syncTimeoutId = null;
+      let syncInFlight = false;
+      let syncQueued = false;
       let controlCenterOpen = false;
       let lastImportedUrl = "";
       let parentUnlocked = false;
@@ -1067,7 +1071,7 @@
 
       function saveCoefficients() {
         storeCoefficientsLocally();
-        persistState();
+        queuePersistState();
       }
 
       function loadCoefficients() {
@@ -1098,7 +1102,7 @@
 
       function saveLedger() {
         storeLedgerLocally();
-        persistState();
+        queuePersistState({ immediate: true });
       }
 
       function loadLedger() {
@@ -1147,6 +1151,16 @@
         }
       }
 
+      function resetSyncState() {
+        if (syncTimeoutId) {
+          clearTimeout(syncTimeoutId);
+          syncTimeoutId = null;
+        }
+
+        syncInFlight = false;
+        syncQueued = false;
+      }
+
       async function persistState() {
         if (!currentUser) {
           return;
@@ -1171,6 +1185,57 @@
 
         lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : ledger.length;
         setAuthStatus(`Данные семьи сохранены в облаке для ${currentUser.email}.`, "good");
+      }
+
+      async function flushPersistState() {
+        if (!currentUser) {
+          resetSyncState();
+          return;
+        }
+
+        if (syncTimeoutId) {
+          clearTimeout(syncTimeoutId);
+          syncTimeoutId = null;
+        }
+
+        if (syncInFlight) {
+          syncQueued = true;
+          return;
+        }
+
+        syncInFlight = true;
+
+        try {
+          await persistState();
+        } finally {
+          syncInFlight = false;
+
+          if (syncQueued) {
+            syncQueued = false;
+            await flushPersistState();
+          }
+        }
+      }
+
+      function queuePersistState(options = {}) {
+        if (!currentUser) {
+          return;
+        }
+
+        const { immediate = false } = options;
+
+        if (immediate) {
+          void flushPersistState();
+          return;
+        }
+
+        if (syncTimeoutId) {
+          clearTimeout(syncTimeoutId);
+        }
+
+        syncTimeoutId = setTimeout(function () {
+          void flushPersistState();
+        }, SYNC_DEBOUNCE_MS);
       }
 
       async function loadRemoteState() {
@@ -1228,6 +1293,7 @@
       async function syncCurrentSession(sessionUser) {
         currentUser = sessionUser || null;
         parentUnlocked = false;
+        resetSyncState();
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
