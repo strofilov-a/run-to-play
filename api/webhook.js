@@ -4,6 +4,7 @@ const DEFAULT_COEFFICIENTS = {
   Cycling: 230,
   Gym: 250
 };
+const DEFAULT_WEBHOOK_TARGET_EMAIL = "strofilov.a@icloud.com";
 
 function json(response, statusCode, payload) {
   response.status(statusCode).setHeader("content-type", "application/json; charset=utf-8");
@@ -242,10 +243,11 @@ export default async function handler(request, response) {
 
   const email = typeof payload.email === "string" ? payload.email.trim() : "";
   const userIdFromBody = typeof payload.userId === "string" ? payload.userId.trim() : "";
-  const userId = userIdFromBody || (email ? await resolveUserIdByEmail(email) : null);
+  const targetEmail = email || getEnv("WEBHOOK_TARGET_EMAIL", DEFAULT_WEBHOOK_TARGET_EMAIL);
+  const userId = userIdFromBody || (targetEmail ? await resolveUserIdByEmail(targetEmail) : null);
 
   if (!userId) {
-    json(response, 400, { error: "Provide a valid userId or email." });
+    json(response, 400, { error: "Provide a valid userId, email, or WEBHOOK_TARGET_EMAIL." });
     return;
   }
 
@@ -304,6 +306,7 @@ export default async function handler(request, response) {
       ok: true,
       duplicate: false,
       userId,
+      targetEmail,
       sourceId,
       activity,
       bpm,
