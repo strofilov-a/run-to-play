@@ -726,6 +726,7 @@
 
             <div class="actions">
               <button class="primary" id="fetchLinkButton" type="button">Заполнить из ссылки</button>
+              <button class="secondary" id="fetchProfileLatestButton" type="button">Последняя из профиля</button>
               <button class="success" id="quickAddButton" type="button">Добавить</button>
             </div>
 
@@ -936,6 +937,7 @@
 
       const addButton = document.getElementById("addButton");
       const quickAddButton = document.getElementById("quickAddButton");
+      const fetchProfileLatestButton = document.getElementById("fetchProfileLatestButton");
       const resetButton = document.getElementById("resetButton");
       const subtractButton = document.getElementById("subtractButton");
       const clearLogButton = document.getElementById("clearLogButton");
@@ -997,6 +999,7 @@
       let clearLogTimeoutId = null;
       let authMode = "choice";
       let currentWebhookSecret = "";
+      let profileAutoFetchDone = false;
 
       function setStatus(element, baseClass, message, tone) {
         element.textContent = message;
@@ -1201,6 +1204,10 @@
       function renderWebhookSecret() {
         webhookSecretField.value = currentWebhookSecret || "";
         copyWebhookSecretButton.disabled = !currentWebhookSecret;
+      }
+
+      function getCurrentProfileUrl() {
+        return currentUser?.user_metadata?.s10_profile_url?.trim() || "";
       }
 
       function createWebhookSecret() {
@@ -1414,13 +1421,18 @@
 
         if (currentUser) {
           authEmailField.value = currentUser.email || "";
+          profileAutoFetchDone = false;
           await ensureWebhookSecret();
           renderAuthFlow();
           await loadRemoteState();
+          if (!activityUrlField.value.trim()) {
+            await fetchLatestActivityFromProfile({ auto: true });
+          }
           return;
         }
 
         currentWebhookSecret = "";
+        profileAutoFetchDone = false;
         renderWebhookSecret();
         renderAuthFlow();
         lastRemoteEntryCount = 0;
@@ -1905,6 +1917,46 @@
         }
       }
 
+      async function fetchLatestActivityFromProfile(options = {}) {
+        const { auto = false } = options;
+        const profileUrl = getCurrentProfileUrl();
+
+        if (!profileUrl) {
+          if (!auto) {
+            setOcrStatus("Сначала сохраните ссылку на профиль S10 в аккаунте.", "bad");
+          }
+          return;
+        }
+
+        if (auto && profileAutoFetchDone) {
+          return;
+        }
+
+        if (auto) {
+          profileAutoFetchDone = true;
+        }
+
+        if (!auto) {
+          setOcrStatus("Ищу последнюю тренировку в сохранённом профиле S10...", "");
+        }
+
+        try {
+          const latestResponse = await fetch(`/api/fetch-profile-latest?url=${encodeURIComponent(profileUrl)}`);
+          const latestPayload = await latestResponse.json();
+
+          if (!latestResponse.ok) {
+            throw new Error(latestPayload.error || "Не удалось найти последнюю тренировку в профиле.");
+          }
+
+          activityUrlField.value = latestPayload.activityUrl;
+          await fetchActivityFromLink();
+        } catch (error) {
+          if (!auto) {
+            setOcrStatus(error.message || "Не удалось получить последнюю тренировку из профиля.", "bad");
+          }
+        }
+      }
+
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         updatePreview();
@@ -2027,6 +2079,9 @@
       });
 
       fetchLinkButton.addEventListener("click", runWithButtonLoading(fetchLinkButton, fetchActivityFromLink));
+      fetchProfileLatestButton.addEventListener("click", runWithButtonLoading(fetchProfileLatestButton, async function () {
+        await fetchLatestActivityFromProfile();
+      }));
 
       chooseSignUpButton.addEventListener("click", function () {
         openAuthMode("signup");
