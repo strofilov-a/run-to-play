@@ -194,7 +194,7 @@ async function resolveTargetUserId(payload) {
 }
 
 async function loadFamilyState(userId) {
-  const response = await fetchSupabase(`/rest/v1/family_state?user_id=eq.${encodeURIComponent(userId)}&select=user_id,ledger,coefficients`, {
+  const response = await fetchSupabase(`/rest/v1/family_state?user_id=eq.${encodeURIComponent(userId)}&select=user_id,family_id,ledger,coefficients`, {
     method: "GET"
   });
 
@@ -207,7 +207,7 @@ async function loadFamilyState(userId) {
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
-async function saveFamilyState(userId, ledger, coefficients) {
+async function saveFamilyState(userId, familyId, ledger, coefficients) {
   const response = await fetchSupabase("/rest/v1/family_state", {
     method: "POST",
     headers: {
@@ -216,6 +216,7 @@ async function saveFamilyState(userId, ledger, coefficients) {
     body: JSON.stringify([
       {
         user_id: userId,
+        family_id: familyId || userId,
         ledger,
         coefficients
       }
@@ -321,7 +322,7 @@ export default async function handler(request, response) {
       })
     );
 
-    await saveFamilyState(userId, nextLedger, coefficients);
+    await saveFamilyState(userId, state?.family_id || userId, nextLedger, coefficients);
 
     json(response, 200, {
       ok: true,

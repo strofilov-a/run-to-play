@@ -944,6 +944,7 @@
       const LEDGER_STORAGE_KEY = "run-to-play-ledger";
       const SYNC_DEBOUNCE_MS = 700;
       let currentUser = null;
+      let currentFamilyId = null;
       let lastRemoteEntryCount = 0;
       let syncTimeoutId = null;
       let syncInFlight = false;
@@ -1168,6 +1169,7 @@
 
         const payload = {
           user_id: currentUser.id,
+          family_id: currentFamilyId || currentUser.id,
           ledger,
           coefficients: getCurrentCoefficients()
         };
@@ -1175,7 +1177,7 @@
         const { data, error } = await supabase
           .from("family_state")
           .upsert(payload, { onConflict: "user_id" })
-          .select("ledger")
+          .select("ledger, family_id")
           .single();
 
         if (error) {
@@ -1183,6 +1185,7 @@
           return;
         }
 
+        currentFamilyId = data?.family_id || currentFamilyId || currentUser.id;
         lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : ledger.length;
         setAuthStatus(`Данные семьи сохранены в облаке для ${currentUser.email}.`, "good");
       }
@@ -1245,7 +1248,7 @@
 
         const { data, error } = await supabase
           .from("family_state")
-          .select("ledger, coefficients")
+          .select("ledger, coefficients, family_id")
           .eq("user_id", currentUser.id)
           .maybeSingle();
 
@@ -1254,6 +1257,7 @@
           return;
         }
 
+        currentFamilyId = data?.family_id || currentFamilyId || currentUser.id;
         const hasLocalLedger = Array.isArray(ledger) && ledger.length > 0;
         const hasRemoteLedger = Array.isArray(data?.ledger) && data.ledger.length > 0;
         lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : 0;
@@ -1292,6 +1296,7 @@
 
       async function syncCurrentSession(sessionUser) {
         currentUser = sessionUser || null;
+        currentFamilyId = sessionUser ? currentFamilyId : null;
         parentUnlocked = false;
         resetSyncState();
 
