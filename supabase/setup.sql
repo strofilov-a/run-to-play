@@ -23,8 +23,38 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+alter table public.profiles add column if not exists webhook_secret text;
+alter table public.profiles add column if not exists s10_profile_url text;
+alter table public.profiles add column if not exists s10_user_id text;
+alter table public.profiles add column if not exists sync_enabled boolean not null default true;
+alter table public.profiles add column if not exists last_webhook_at timestamptz;
+
+create unique index if not exists profiles_webhook_secret_key
+on public.profiles (webhook_secret)
+where webhook_secret is not null;
+
+create unique index if not exists profiles_s10_user_id_key
+on public.profiles (s10_user_id)
+where s10_user_id is not null;
+
+create table if not exists public.activity_imports (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  family_id uuid not null,
+  source_id text not null,
+  source_url text,
+  activity text not null,
+  bpm integer not null check (bpm > 0),
+  duration_minutes integer not null check (duration_minutes > 0),
+  earned_minutes integer not null check (earned_minutes >= 0),
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (user_id, source_id)
+);
+
 alter table public.family_state enable row level security;
 alter table public.profiles enable row level security;
+alter table public.activity_imports enable row level security;
 
 drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
@@ -44,6 +74,20 @@ on public.profiles
 for update
 using (auth.uid() is not null and auth.uid() = id)
 with check (auth.uid() is not null and auth.uid() = id);
+
+drop policy if exists "Users can read own family imports" on public.activity_imports;
+create policy "Users can read own family imports"
+on public.activity_imports
+for select
+using (
+  auth.uid() is not null
+  and exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.family_id = activity_imports.family_id
+  )
+);
 
 create or replace function public.find_family_by_code(input_code text)
 returns table (family_id uuid)
@@ -110,3 +154,166 @@ with check (
       and profiles.family_id = family_state.family_id
   )
 );
+
+create or replace function public.import_activity_webhook(
+  p_user_id uuid,
+  p_source_id text,
+  p_source_url text,
+  p_activity text,
+  p_bpm integer,
+  p_duration_minutes integer,
+  p_payload jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_state public.family_state%rowtype;
+  v_family_id uuid;
+  v_coefficients jsonb;
+  v_ledger jsonb;
+  v_coefficient integer;
+  v_earned_minutes integer;
+  v_created_at timestamptz := now();
+  v_entry jsonb;
+begin
+  if p_user_id is null then
+    raise exception 'user_id is required';
+  end if;
+
+  if p_source_id is null or btrim(p_source_id) = '' then
+    raise exception 'source_id is required';
+  end if;
+
+  if p_bpm is null or p_bpm <= 0 then
+    raise exception 'bpm must be positive';
+  end if;
+
+  if p_duration_minutes is null or p_duration_minutes <= 0 then
+    raise exception 'duration_minutes must be positive';
+  end if;
+
+  if exists (
+    select 1
+    from public.activity_imports
+    where user_id = p_user_id
+      and source_id = p_source_id
+  ) then
+    return jsonb_build_object(
+      'ok', true,
+      'duplicate', true,
+      'userId', p_user_id,
+      'sourceId', p_source_id
+    );
+  end if;
+
+  select *
+  into v_state
+  from public.family_state
+  where user_id = p_user_id
+  for update;
+
+  v_family_id := coalesce(v_state.family_id, p_user_id);
+  v_ledger := coalesce(v_state.ledger, '[]'::jsonb);
+  v_coefficients := jsonb_build_object(
+    'Running', 170,
+    'Cycling', 230,
+    'Gym', 250
+  ) || coalesce(v_state.coefficients, '{}'::jsonb);
+
+  v_coefficient := greatest(
+    coalesce((v_coefficients ->> p_activity)::integer, 170),
+    1
+  );
+  v_earned_minutes := greatest(round((p_bpm::numeric * p_duration_minutes::numeric) / v_coefficient), 0);
+
+  v_entry := jsonb_build_object(
+    'type', 'plus',
+    'title', p_activity || ' imported',
+    'minutes', v_earned_minutes,
+    'meta', 'Minutes added automatically from webhook',
+    'timestamp', 'Добавлено автоматически',
+    'createdAt', v_created_at,
+    'sourceId', p_source_id,
+    'sourceUrl', nullif(p_source_url, ''),
+    'bpm', p_bpm,
+    'durationMinutes', p_duration_minutes
+  );
+
+  insert into public.activity_imports (
+    user_id,
+    family_id,
+    source_id,
+    source_url,
+    activity,
+    bpm,
+    duration_minutes,
+    earned_minutes,
+    payload
+  )
+  values (
+    p_user_id,
+    v_family_id,
+    p_source_id,
+    nullif(p_source_url, ''),
+    p_activity,
+    p_bpm,
+    p_duration_minutes,
+    v_earned_minutes,
+    coalesce(p_payload, '{}'::jsonb)
+  );
+
+  insert into public.family_state (
+    user_id,
+    family_id,
+    ledger,
+    coefficients,
+    updated_at
+  )
+  values (
+    p_user_id,
+    v_family_id,
+    v_ledger || jsonb_build_array(v_entry),
+    v_coefficients,
+    now()
+  )
+  on conflict (user_id) do update
+  set family_id = excluded.family_id,
+      ledger = excluded.ledger,
+      coefficients = excluded.coefficients,
+      updated_at = now();
+
+  update public.profiles
+  set last_webhook_at = now(),
+      updated_at = now()
+  where id = p_user_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'duplicate', false,
+    'userId', p_user_id,
+    'sourceId', p_source_id,
+    'activity', p_activity,
+    'bpm', p_bpm,
+    'durationMinutes', p_duration_minutes,
+    'coefficient', v_coefficient,
+    'earnedMinutes', v_earned_minutes,
+    'balanceEntries', jsonb_array_length(v_ledger) + 1
+  );
+exception
+  when unique_violation then
+    return jsonb_build_object(
+      'ok', true,
+      'duplicate', true,
+      'userId', p_user_id,
+      'sourceId', p_source_id
+    );
+end;
+$$;
+
+revoke all on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) from public;
+revoke all on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) from anon;
+revoke all on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) from authenticated;
+grant execute on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) to service_role;

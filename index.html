@@ -1210,10 +1210,77 @@
         return currentUser?.user_metadata?.s10_profile_url?.trim() || "";
       }
 
+      function extractS10UserId(profileUrl) {
+        if (!profileUrl) {
+          return "";
+        }
+
+        try {
+          const parsedUrl = new URL(profileUrl);
+          const queryId =
+            parsedUrl.searchParams.get("user") ||
+            parsedUrl.searchParams.get("id") ||
+            parsedUrl.searchParams.get("uid");
+
+          if (queryId && /^\d+$/.test(queryId)) {
+            return queryId;
+          }
+
+          const pathMatch = parsedUrl.pathname.match(/\/student\/?(\d+)?/i);
+
+          if (pathMatch?.[1]) {
+            return pathMatch[1];
+          }
+
+          const trailingDigits = profileUrl.match(/(\d{5,})/);
+          return trailingDigits ? trailingDigits[1] : "";
+        } catch {
+          const trailingDigits = String(profileUrl).match(/(\d{5,})/);
+          return trailingDigits ? trailingDigits[1] : "";
+        }
+      }
+
       function createWebhookSecret() {
         const bytes = new Uint8Array(12);
         crypto.getRandomValues(bytes);
         return `r2p_${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+      }
+
+      async function syncProfileRecord() {
+        if (!currentUser) {
+          return true;
+        }
+
+        const { data: existingProfile, error: existingProfileError } = await supabase
+          .from("profiles")
+          .select("family_id")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        if (existingProfileError) {
+          setAuthStatus("Не удалось прочитать профиль Supabase перед сохранением webhook.", "bad");
+          return false;
+        }
+
+        const payload = {
+          id: currentUser.id,
+          family_id: existingProfile?.family_id || currentFamilyId || currentUser.id,
+          webhook_secret: currentWebhookSecret || null,
+          s10_profile_url: getCurrentProfileUrl() || null,
+          s10_user_id: extractS10UserId(getCurrentProfileUrl()) || null,
+          sync_enabled: true
+        };
+
+        const { error } = await supabase
+          .from("profiles")
+          .upsert(payload, { onConflict: "id" });
+
+        if (error) {
+          setAuthStatus("Не удалось сохранить настройки webhook в профиле Supabase.", "bad");
+          return false;
+        }
+
+        return true;
       }
 
       async function ensureWebhookSecret() {
@@ -1228,6 +1295,7 @@
         if (existingSecret) {
           currentWebhookSecret = existingSecret;
           renderWebhookSecret();
+          await syncProfileRecord();
           return existingSecret;
         }
 
@@ -1248,6 +1316,7 @@
         currentUser = data.user || currentUser;
         currentWebhookSecret = currentUser.user_metadata?.webhook_secret || generatedSecret;
         renderWebhookSecret();
+        await syncProfileRecord();
         return currentWebhookSecret;
       }
 
@@ -1410,6 +1479,7 @@
         storeCoefficientsLocally();
         renderLedger();
         updatePreview();
+        await syncProfileRecord();
         setAuthStatus(`Вы вошли как ${currentUser.email}. Показаны общие данные семьи из облака.`, "good");
       }
 
@@ -2144,6 +2214,7 @@
             renderWebhookSecret();
             authPasswordField.value = "";
             if (currentUser) {
+              await syncProfileRecord();
               await loadRemoteState();
             } else {
               setAuthStatus("Аккаунт создан. Проверь почту, если Supabase попросит подтвердить email.", "good");
