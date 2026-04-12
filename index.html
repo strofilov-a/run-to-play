@@ -1399,9 +1399,7 @@
           return;
         }
 
-        if (hasRemoteLedger) {
-          ledger = data.ledger;
-        }
+        ledger = Array.isArray(data?.ledger) ? data.ledger : [];
 
         if (data.coefficients) {
           if (data.coefficients.Running) {
