@@ -82,8 +82,8 @@ async function getProfile(userId) {
   return Array.isArray(rows) ? rows[0] : null;
 }
 
-async function getFamilyState(userId) {
-  const response = await fetchSupabase(`/rest/v1/family_state?user_id=eq.${encodeURIComponent(userId)}&select=user_id,family_id,ledger,coefficients&limit=1`, {
+async function getFamilyState(familyId) {
+  const response = await fetchSupabase(`/rest/v1/family_state?family_id=eq.${encodeURIComponent(familyId)}&select=user_id,family_id,ledger,coefficients&limit=1`, {
     method: "GET"
   });
 
@@ -157,7 +157,7 @@ export default async function handler(request, response) {
       return;
     }
 
-    const state = await getFamilyState(user.id);
+    const state = await getFamilyState(profile.family_id || user.id);
     const coefficients = {
       ...DEFAULT_COEFFICIENTS,
       ...(state?.coefficients && typeof state.coefficients === "object" ? state.coefficients : {})
@@ -178,7 +178,7 @@ export default async function handler(request, response) {
     ]);
 
     const saved = await saveFamilyState({
-      user_id: user.id,
+      user_id: state?.user_id || user.id,
       family_id: state?.family_id || profile.family_id || user.id,
       ledger: nextLedger,
       coefficients

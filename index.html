@@ -1396,10 +1396,23 @@
           return;
         }
 
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("family_id")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        if (profileError) {
+          setAuthStatus("Не удалось загрузить профиль семьи.", "bad");
+          return;
+        }
+
+        const familyId = profileData?.family_id || currentUser.id;
+
         const { data, error } = await supabase
           .from("family_state")
           .select("ledger, coefficients, family_id")
-          .eq("user_id", currentUser.id)
+          .eq("family_id", familyId)
           .maybeSingle();
 
         if (error) {
@@ -1407,9 +1420,7 @@
           return;
         }
 
-        currentFamilyId = data?.family_id || currentFamilyId || currentUser.id;
-        const hasLocalLedger = Array.isArray(ledger) && ledger.length > 0;
-        const hasRemoteLedger = Array.isArray(data?.ledger) && data.ledger.length > 0;
+        currentFamilyId = data?.family_id || familyId;
         lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : 0;
 
         if (!data) {
