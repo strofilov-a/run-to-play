@@ -1893,13 +1893,41 @@
         setOcrStatus(`Запись добавлена. ${AUTO_SYNC_MESSAGE}`, "good");
       }
 
+      function shouldUseManualCloudAdd() {
+        if (!currentUser) {
+          return false;
+        }
+
+        if (!lastImportedUrl) {
+          return true;
+        }
+
+        const session = calculateSession();
+        const detectedHeartRateValue = detectedValues.heartRate ?? 0;
+        const detectedDurationValue = detectedValues.durationMinutes ?? 0;
+
+        if (session.bonus > 0) {
+          return true;
+        }
+
+        if (session.heartRate !== detectedHeartRateValue) {
+          return true;
+        }
+
+        if (session.duration !== detectedDurationValue) {
+          return true;
+        }
+
+        return false;
+      }
+
       async function importCurrentActivitySecurely() {
         if (!currentUser) {
           addCurrentSessionToLog();
           return;
         }
 
-        if (!lastImportedUrl) {
+        if (shouldUseManualCloudAdd()) {
           const manualSession = calculateSession();
 
           if (!manualSession.duration || !manualSession.heartRate) {
