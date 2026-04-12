@@ -56,6 +56,10 @@ alter table public.family_state enable row level security;
 alter table public.profiles enable row level security;
 alter table public.activity_imports enable row level security;
 
+revoke insert, update, delete on table public.family_state from anon, authenticated;
+revoke insert, update, delete on table public.profiles from anon, authenticated;
+revoke insert, update, delete on table public.activity_imports from anon, authenticated;
+
 drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
 on public.profiles
@@ -63,17 +67,7 @@ for select
 using (auth.uid() is not null and auth.uid() = id);
 
 drop policy if exists "Users can insert own profile" on public.profiles;
-create policy "Users can insert own profile"
-on public.profiles
-for insert
-with check (auth.uid() is not null and auth.uid() = id);
-
 drop policy if exists "Users can update own profile" on public.profiles;
-create policy "Users can update own profile"
-on public.profiles
-for update
-using (auth.uid() is not null and auth.uid() = id)
-with check (auth.uid() is not null and auth.uid() = id);
 
 drop policy if exists "Users can read own family imports" on public.activity_imports;
 create policy "Users can read own family imports"
@@ -119,41 +113,7 @@ using (
 );
 
 drop policy if exists "Users can insert own family state" on public.family_state;
-create policy "Users can insert own family state"
-on public.family_state
-for insert
-with check (
-  auth.uid() is not null
-  and exists (
-    select 1
-    from public.profiles
-    where profiles.id = auth.uid()
-      and profiles.family_id = family_state.family_id
-  )
-);
-
 drop policy if exists "Users can update own family state" on public.family_state;
-create policy "Users can update own family state"
-on public.family_state
-for update
-using (
-  auth.uid() is not null
-  and exists (
-    select 1
-    from public.profiles
-    where profiles.id = auth.uid()
-      and profiles.family_id = family_state.family_id
-  )
-)
-with check (
-  auth.uid() is not null
-  and exists (
-    select 1
-    from public.profiles
-    where profiles.id = auth.uid()
-      and profiles.family_id = family_state.family_id
-  )
-);
 
 create or replace function public.import_activity_webhook(
   p_user_id uuid,
@@ -317,3 +277,146 @@ revoke all on function public.import_activity_webhook(uuid, text, text, text, in
 revoke all on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) from anon;
 revoke all on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) from authenticated;
 grant execute on function public.import_activity_webhook(uuid, text, text, text, integer, integer, jsonb) to service_role;
+
+create or replace function public.sync_profile_client(
+  p_webhook_secret text,
+  p_s10_profile_url text,
+  p_s10_user_id text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_existing public.profiles%rowtype;
+begin
+  if v_user_id is null then
+    raise exception 'auth required';
+  end if;
+
+  select *
+  into v_existing
+  from public.profiles
+  where id = v_user_id;
+
+  insert into public.profiles (
+    id,
+    family_id,
+    webhook_secret,
+    s10_profile_url,
+    s10_user_id,
+    sync_enabled,
+    updated_at
+  )
+  values (
+    v_user_id,
+    coalesce(v_existing.family_id, v_user_id),
+    nullif(trim(p_webhook_secret), ''),
+    nullif(trim(p_s10_profile_url), ''),
+    coalesce(v_existing.s10_user_id, nullif(trim(p_s10_user_id), '')),
+    coalesce(v_existing.sync_enabled, true),
+    now()
+  )
+  on conflict (id) do update
+  set webhook_secret = coalesce(excluded.webhook_secret, public.profiles.webhook_secret),
+      s10_profile_url = coalesce(excluded.s10_profile_url, public.profiles.s10_profile_url),
+      s10_user_id = coalesce(public.profiles.s10_user_id, excluded.s10_user_id),
+      updated_at = now();
+
+  return jsonb_build_object(
+    'ok', true,
+    'userId', v_user_id
+  );
+end;
+$$;
+
+revoke all on function public.sync_profile_client(text, text, text) from public;
+grant execute on function public.sync_profile_client(text, text, text) to authenticated;
+
+create or replace function public.spend_family_minutes(
+  p_user_id uuid,
+  p_minutes integer,
+  p_note text default 'Gameplay used'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+  v_state public.family_state%rowtype;
+  v_ledger jsonb;
+  v_entry jsonb;
+  v_created_at timestamptz := now();
+begin
+  if p_user_id is null then
+    raise exception 'user_id is required';
+  end if;
+
+  if auth.uid() is distinct from p_user_id then
+    raise exception 'forbidden';
+  end if;
+
+  if p_minutes is null or p_minutes <= 0 then
+    raise exception 'minutes must be positive';
+  end if;
+
+  select *
+  into v_profile
+  from public.profiles
+  where id = p_user_id;
+
+  if v_profile.id is null then
+    raise exception 'profile not found';
+  end if;
+
+  select *
+  into v_state
+  from public.family_state
+  where family_id = v_profile.family_id
+  for update;
+
+  v_ledger := coalesce(v_state.ledger, '[]'::jsonb);
+  v_entry := jsonb_build_object(
+    'type', 'minus',
+    'title', coalesce(nullif(trim(p_note), ''), 'Gameplay used'),
+    'minutes', p_minutes,
+    'meta', 'Minutes removed from balance',
+    'timestamp', 'Списано автоматически',
+    'createdAt', v_created_at
+  );
+
+  if v_state.user_id is null then
+    insert into public.family_state (
+      user_id,
+      family_id,
+      ledger,
+      coefficients,
+      updated_at
+    )
+    values (
+      p_user_id,
+      v_profile.family_id,
+      jsonb_build_array(v_entry),
+      '{"Running":170,"Cycling":230,"Gym":250}'::jsonb,
+      now()
+    );
+  else
+    update public.family_state
+    set ledger = v_ledger || jsonb_build_array(v_entry),
+        updated_at = now()
+    where user_id = v_state.user_id;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'minutes', p_minutes
+  );
+end;
+$$;
+
+revoke all on function public.spend_family_minutes(uuid, integer, text) from public;
+grant execute on function public.spend_family_minutes(uuid, integer, text) to authenticated;

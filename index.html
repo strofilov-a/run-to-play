@@ -1118,7 +1118,6 @@
 
       function saveCoefficients() {
         storeCoefficientsLocally();
-        queuePersistState();
       }
 
       function loadCoefficients() {
@@ -1149,7 +1148,6 @@
 
       function saveLedger() {
         storeLedgerLocally();
-        queuePersistState({ immediate: true });
       }
 
       function loadLedger() {
@@ -1251,29 +1249,11 @@
           return true;
         }
 
-        const { data: existingProfile, error: existingProfileError } = await supabase
-          .from("profiles")
-          .select("family_id")
-          .eq("id", currentUser.id)
-          .maybeSingle();
-
-        if (existingProfileError) {
-          setAuthStatus("Не удалось прочитать профиль Supabase перед сохранением webhook.", "bad");
-          return false;
-        }
-
-        const payload = {
-          id: currentUser.id,
-          family_id: existingProfile?.family_id || currentFamilyId || currentUser.id,
-          webhook_secret: currentWebhookSecret || null,
-          s10_profile_url: getCurrentProfileUrl() || null,
-          s10_user_id: extractS10UserId(getCurrentProfileUrl()) || null,
-          sync_enabled: true
-        };
-
-        const { error } = await supabase
-          .from("profiles")
-          .upsert(payload, { onConflict: "id" });
+        const { error } = await supabase.rpc("sync_profile_client", {
+          p_webhook_secret: currentWebhookSecret || null,
+          p_s10_profile_url: getCurrentProfileUrl() || null,
+          p_s10_user_id: extractS10UserId(getCurrentProfileUrl()) || null
+        });
 
         if (error) {
           setAuthStatus("Не удалось сохранить настройки webhook в профиле Supabase.", "bad");
@@ -1351,31 +1331,7 @@
       }
 
       async function persistState() {
-        if (!currentUser) {
-          return;
-        }
-
-        const payload = {
-          user_id: currentUser.id,
-          family_id: currentFamilyId || currentUser.id,
-          ledger,
-          coefficients: getCurrentCoefficients()
-        };
-
-        const { data, error } = await supabase
-          .from("family_state")
-          .upsert(payload, { onConflict: "user_id" })
-          .select("ledger, family_id")
-          .single();
-
-        if (error) {
-          setAuthStatus("Вход выполнен, но не удалось сохранить данные в облако. Проверь SQL в Supabase.", "bad");
-          return;
-        }
-
-        currentFamilyId = data?.family_id || currentFamilyId || currentUser.id;
-        lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : ledger.length;
-        setAuthStatus(`Данные семьи сохранены в облаке для ${currentUser.email}.`, "good");
+        return;
       }
 
       async function flushPersistState() {
@@ -1409,24 +1365,7 @@
       }
 
       function queuePersistState(options = {}) {
-        if (!currentUser) {
-          return;
-        }
-
-        const { immediate = false } = options;
-
-        if (immediate) {
-          void flushPersistState();
-          return;
-        }
-
-        if (syncTimeoutId) {
-          clearTimeout(syncTimeoutId);
-        }
-
-        syncTimeoutId = setTimeout(function () {
-          void flushPersistState();
-        }, SYNC_DEBOUNCE_MS);
+        return;
       }
 
       async function loadRemoteState() {
@@ -1451,16 +1390,17 @@
         lastRemoteEntryCount = Array.isArray(data?.ledger) ? data.ledger.length : 0;
 
         if (!data) {
-          await persistState();
-          lastRemoteEntryCount = Array.isArray(ledger) ? ledger.length : 0;
-          setAuthStatus(`Вы вошли как ${currentUser.email}. Создано новое облачное хранилище семьи.`, "good");
+          ledger = [];
+          storeLedgerLocally();
+          renderLedger();
+          updatePreview();
+          await syncProfileRecord();
+          setAuthStatus(`Вы вошли как ${currentUser.email}. Автозачисления теперь идут только через защищённый сервер.`, "good");
           return;
         }
 
         if (hasRemoteLedger) {
           ledger = data.ledger;
-        } else if (hasLocalLedger) {
-          await persistState();
         }
 
         if (data.coefficients) {
@@ -1875,7 +1815,7 @@
 
             top.append(title, value);
 
-            if (controlCenterOpen) {
+            if (controlCenterOpen && !currentUser) {
               const deleteButton = document.createElement("button");
               deleteButton.type = "button";
               deleteButton.className = "ledger-delete";
@@ -1912,6 +1852,10 @@
       }
 
       function addCurrentSessionToLog() {
+        if (currentUser) {
+          return;
+        }
+
         const session = calculateSession();
 
         addLedgerEntry(createLedgerEntry({
@@ -1926,6 +1870,90 @@
         }));
 
         setOcrStatus(`Запись добавлена. ${AUTO_SYNC_MESSAGE}`, "good");
+      }
+
+      async function importCurrentActivitySecurely() {
+        if (!currentUser) {
+          addCurrentSessionToLog();
+          return;
+        }
+
+        if (!lastImportedUrl) {
+          setOcrStatus("В облачном режиме можно начислять минуты только из ссылки S10.", "bad");
+          return;
+        }
+
+        const {
+          data: { session }
+        } = await supabase.auth.getSession();
+
+        const accessToken = session?.access_token;
+
+        if (!accessToken) {
+          setOcrStatus("Нужен активный вход в аккаунт.", "bad");
+          return;
+        }
+
+        const response = await fetch("/api/import-activity", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            url: lastImportedUrl
+          })
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || payload.details || "Не удалось импортировать активность.");
+        }
+
+        await loadRemoteState();
+        setOcrStatus(
+          payload.duplicate
+            ? "Эта тренировка уже была импортирована."
+            : "Тренировка безопасно добавлена через сервер.",
+          "good"
+        );
+      }
+
+      async function spendMinutesSecurely(minutes) {
+        if (!currentUser) {
+          return false;
+        }
+
+        const {
+          data: { session }
+        } = await supabase.auth.getSession();
+
+        const accessToken = session?.access_token;
+
+        if (!accessToken) {
+          setOcrStatus("Нужен активный вход в аккаунт.", "bad");
+          return true;
+        }
+
+        const response = await fetch("/api/spend-minutes", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            minutes
+          })
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || payload.details || "Не удалось списать минуты.");
+        }
+
+        await loadRemoteState();
+        setOcrStatus("Минуты списаны через защищённый серверный маршрут.", "good");
+        return true;
       }
 
       function setOcrStatus(message, tone) {
@@ -2052,11 +2080,11 @@
       bindEvents([runningCoefficientField, cyclingCoefficientField, gymCoefficientField], saveCoefficients, ["input", "change"]);
 
       addButton.addEventListener("click", runWithButtonLoading(addButton, async function () {
-          addCurrentSessionToLog();
+          await importCurrentActivitySecurely();
       }));
 
       quickAddButton.addEventListener("click", runWithButtonLoading(quickAddButton, async function () {
-          addCurrentSessionToLog();
+          await importCurrentActivitySecurely();
       }));
 
       subtractButton.addEventListener("click", runWithButtonLoading(subtractButton, async function () {
@@ -2067,6 +2095,10 @@
           }
 
           const spent = Math.round(subtractMinutes);
+
+          if (await spendMinutesSecurely(spent)) {
+            return;
+          }
 
           addLedgerEntry(createLedgerEntry({
             type: "minus",
@@ -2080,6 +2112,11 @@
       }));
 
       clearLogButton.addEventListener("click", function () {
+        if (currentUser) {
+          setOcrStatus("Очистка облачного лога отключена ради защиты от накрутки и удаления истории.", "bad");
+          return;
+        }
+
         if (!hasParentAccess() || !controlCenterOpen) {
           return;
         }
@@ -2252,6 +2289,14 @@
           updateRoleUI();
       }));
 
+      function updateCloudProtectionUI() {
+        const lockedCloudMode = Boolean(currentUser);
+        runningCoefficientField.disabled = lockedCloudMode;
+        cyclingCoefficientField.disabled = lockedCloudMode;
+        gymCoefficientField.disabled = lockedCloudMode;
+        bonusField.disabled = lockedCloudMode;
+      }
+
       loadCoefficients();
       loadLedger();
       renderWebhookSecret();
@@ -2266,9 +2311,11 @@
       } = await supabase.auth.getSession();
 
       await syncCurrentSession(session?.user || null);
+      updateCloudProtectionUI();
 
       supabase.auth.onAuthStateChange(async function (_event, sessionState) {
         await syncCurrentSession(sessionState?.user || null);
+        updateCloudProtectionUI();
       });
     </script>
   </body>
