@@ -18,9 +18,12 @@ function dedupeIds(matches) {
 
 function extractLatestActivityId(html) {
   const patterns = [
+    /"tracks"\s*:\s*\[\s*{\s*"id"\s*:\s*"([a-z]?\d{6,})"/gi,
+    /"track"\s*:\s*{\s*"id"\s*:\s*"([a-z]?\d{6,})"/gi,
     /"id"\s*:\s*"(g\d{6,})"/gi,
     /"activity"\s*:\s*"(g\d{6,})"/gi,
     /activity\s*#(g\d{6,})/gi,
+    /\b(\d{8,})\b/g,
     /\b(g\d{10,})\b/g
   ];
 
