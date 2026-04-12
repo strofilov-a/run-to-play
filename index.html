@@ -1900,7 +1900,45 @@
         }
 
         if (!lastImportedUrl) {
-          setOcrStatus("В облачном режиме можно начислять минуты только из ссылки S10.", "bad");
+          const manualSession = calculateSession();
+
+          if (!manualSession.duration || !manualSession.heartRate) {
+            setOcrStatus("Для ручного добавления укажи время и пульс.", "bad");
+            return;
+          }
+
+          const {
+            data: { session }
+          } = await supabase.auth.getSession();
+
+          const accessToken = session?.access_token;
+
+          if (!accessToken) {
+            setOcrStatus("Нужен активный вход в аккаунт.", "bad");
+            return;
+          }
+
+          const manualResponse = await fetch("/api/manual-entry", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+              activity: manualSession.activity,
+              heartRate: manualSession.heartRate,
+              durationMinutes: manualSession.duration,
+              bonus: manualSession.bonus
+            })
+          });
+          const manualPayload = await manualResponse.json();
+
+          if (!manualResponse.ok) {
+            throw new Error(manualPayload.error || manualPayload.details || "Не удалось добавить тренировку вручную.");
+          }
+
+          await loadRemoteState();
+          setOcrStatus("Ручная тренировка добавлена через защищённый сервер.", "good");
           return;
         }
 
