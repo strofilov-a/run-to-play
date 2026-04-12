@@ -901,7 +901,7 @@
     <script type="module">
       import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-      const CONTROL_CODE = "4798";
+      const CONTROL_CODE = "stockholm";
       const SUPABASE_URL = "https://redwncjfnkgnoglzhzdz.supabase.co";
       const SUPABASE_ANON_KEY = "sb_publishable_ftH6aqby5DJ-mzpIQbbipg_jnJ3Lk8B";
       const COEFFICIENTS = {
@@ -1956,6 +1956,39 @@
         return true;
       }
 
+      async function clearLogSecurely() {
+        if (!currentUser) {
+          return false;
+        }
+
+        const {
+          data: { session }
+        } = await supabase.auth.getSession();
+
+        const accessToken = session?.access_token;
+
+        if (!accessToken) {
+          setOcrStatus("Нужен активный вход в аккаунт.", "bad");
+          return true;
+        }
+
+        const response = await fetch("/api/clear-log", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${accessToken}`
+          }
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || payload.details || "Не удалось очистить лог.");
+        }
+
+        await loadRemoteState();
+        setOcrStatus("Лог очищен через защищённый серверный маршрут.", "good");
+        return true;
+      }
+
       function setOcrStatus(message, tone) {
         setStatus(ocrStatus, "ocr-status", message, tone);
       }
@@ -2112,11 +2145,6 @@
       }));
 
       clearLogButton.addEventListener("click", function () {
-        if (currentUser) {
-          setOcrStatus("Очистка облачного лога отключена ради защиты от накрутки и удаления истории.", "bad");
-          return;
-        }
-
         if (!hasParentAccess() || !controlCenterOpen) {
           return;
         }
@@ -2131,6 +2159,11 @@
 
         if (!window.confirm("Точно очистить весь лог? Это действие нельзя отменить.")) {
           setOcrStatus("Очистка отменена.", "");
+          return;
+        }
+
+        if (currentUser) {
+          void clearLogSecurely();
           return;
         }
 

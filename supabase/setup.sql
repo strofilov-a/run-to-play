@@ -420,3 +420,45 @@ $$;
 
 revoke all on function public.spend_family_minutes(uuid, integer, text) from public;
 grant execute on function public.spend_family_minutes(uuid, integer, text) to authenticated;
+
+create or replace function public.clear_family_log(
+  p_user_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+begin
+  if p_user_id is null then
+    raise exception 'user_id is required';
+  end if;
+
+  if auth.uid() is distinct from p_user_id then
+    raise exception 'forbidden';
+  end if;
+
+  select *
+  into v_profile
+  from public.profiles
+  where id = p_user_id;
+
+  if v_profile.id is null then
+    raise exception 'profile not found';
+  end if;
+
+  update public.family_state
+  set ledger = '[]'::jsonb,
+      updated_at = now()
+  where family_id = v_profile.family_id;
+
+  return jsonb_build_object(
+    'ok', true
+  );
+end;
+$$;
+
+revoke all on function public.clear_family_log(uuid) from public;
+grant execute on function public.clear_family_log(uuid) to authenticated;
