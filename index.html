@@ -1170,6 +1170,29 @@
         }
       }
 
+      function clearLocalSessionData() {
+        ledger = [];
+        localStorage.removeItem(LEDGER_STORAGE_KEY);
+        localStorage.removeItem(COEFFICIENT_STORAGE_KEY);
+        runningCoefficientField.value = COEFFICIENTS.Running;
+        cyclingCoefficientField.value = COEFFICIENTS.Cycling;
+        gymCoefficientField.value = COEFFICIENTS.Gym;
+        activityField.value = "Running";
+        heartRateField.value = "0";
+        durationField.value = "0";
+        bonusField.value = "0";
+        subtractMinutesField.value = "0";
+        activityUrlField.value = "";
+        lastImportedUrl = "";
+        detectedValues = {
+          heartRate: null,
+          durationMinutes: null
+        };
+        updateDetectedDisplay();
+        renderLedger();
+        updatePreview();
+      }
+
       function setAuthStatus(message, tone) {
         const localCount = Array.isArray(ledger) ? ledger.length : 0;
         const cloudPart = currentUser ? ` Локально: ${localCount}. В облаке: ${lastRemoteEntryCount}.` : "";
@@ -2309,6 +2332,7 @@
 
       logOutButton.addEventListener("click", runWithButtonLoading(logOutButton, async function () {
           await supabase.auth.signOut();
+          clearLocalSessionData();
           currentUser = null;
           currentWebhookSecret = "";
           renderWebhookSecret();
@@ -2316,7 +2340,7 @@
           parentUnlocked = false;
           resetClearLogConfirmation();
           openAuthMode("choice");
-          setAuthStatus("Вы вышли. Данные продолжают быть видны локально в этом браузере.", "");
+          setAuthStatus("Вы вышли. Локальные данные очищены.", "");
           updateRoleUI();
       }));
 
