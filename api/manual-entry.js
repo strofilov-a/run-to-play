@@ -1,7 +1,7 @@
 const DEFAULT_SUPABASE_URL = "https://redwncjfnkgnoglzhzdz.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_ftH6aqby5DJ-mzpIQbbipg_jnJ3Lk8B";
 const DEFAULT_COEFFICIENTS = {
-  Running: 170,
+  Running: 111,
   Cycling: 230,
   Gym: 250
 };
@@ -162,7 +162,7 @@ export default async function handler(request, response) {
       ...DEFAULT_COEFFICIENTS,
       ...(state?.coefficients && typeof state.coefficients === "object" ? state.coefficients : {})
     };
-    const coefficient = Math.max(Number(coefficients[activity]) || DEFAULT_COEFFICIENTS[activity] || 170, 1);
+    const coefficient = Math.max(Number(coefficients[activity]) || DEFAULT_COEFFICIENTS[activity] || 111, 1);
     const earnedMinutes = Math.max(Math.round((bpm * durationMinutes) / coefficient + bonus), 0);
     const createdAt = new Date().toISOString();
     const nextLedger = (Array.isArray(state?.ledger) ? state.ledger : []).concat([

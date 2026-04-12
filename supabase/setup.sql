@@ -2,7 +2,7 @@ create table if not exists public.family_state (
   user_id uuid primary key references auth.users(id) on delete cascade,
   family_id uuid,
   ledger jsonb not null default '[]'::jsonb,
-  coefficients jsonb not null default '{"Running":170,"Cycling":230,"Gym":250}'::jsonb,
+  coefficients jsonb not null default '{"Running":111,"Cycling":230,"Gym":250}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -401,7 +401,7 @@ begin
       p_user_id,
       v_profile.family_id,
       jsonb_build_array(v_entry),
-      '{"Running":170,"Cycling":230,"Gym":250}'::jsonb,
+      '{"Running":111,"Cycling":230,"Gym":250}'::jsonb,
       now()
     );
   else
