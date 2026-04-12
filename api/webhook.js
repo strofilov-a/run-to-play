@@ -340,18 +340,18 @@ async function fetchActivityDetails(activityUrl) {
   const html = await upstream.text();
   const text = htmlToText(html);
   const trackData = extractTrackDataFromHtml(html);
-  const bpm = trackData.bpm ?? extractHeartRate(text);
+  const parsedBpm = trackData.bpm ?? extractHeartRate(text);
   const durationMinutes = trackData.cleanTime
     ? parseTimeToMinutes(trackData.cleanTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/))
     : extractMovingTime(text);
   const activity = inferActivityFromType(trackData.type, text);
 
-  if (!bpm || !durationMinutes) {
-    throw new Error("Could not parse bpm and moving time from the S10 activity page.");
+  if (!durationMinutes) {
+    throw new Error("Could not parse moving time from the S10 activity page.");
   }
 
   return {
-    bpm,
+    bpm: parsedBpm || 100,
     durationMinutes,
     activity: normalizeActivity(activity)
   };
