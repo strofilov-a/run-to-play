@@ -151,19 +151,19 @@ export default async function handler(request, response) {
     const html = await upstream.text();
     const text = htmlToText(html);
     const trackData = extractTrackDataFromHtml(html);
-    const heartRate = trackData.bpm ?? extractHeartRate(text);
+    const parsedHeartRate = trackData.bpm ?? extractHeartRate(text);
     const durationMinutes = trackData.cleanTime
       ? parseTimeToMinutes(trackData.cleanTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/))
       : extractMovingTime(text);
     const activity = inferActivityFromType(trackData.type, text);
 
-    if (heartRate === null && durationMinutes === null) {
-      response.status(422).json({ error: "Could not find heart rate or moving time on the page." });
+    if (durationMinutes === null) {
+      response.status(422).json({ error: "Could not find moving time on the page." });
       return;
     }
 
     response.status(200).json({
-      heartRate,
+      heartRate: parsedHeartRate ?? 100,
       durationMinutes,
       activity
     });
