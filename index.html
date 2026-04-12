@@ -2005,6 +2005,10 @@
           throw new Error(payload.error || payload.details || "Не удалось очистить лог.");
         }
 
+        ledger = [];
+        storeLedgerLocally();
+        renderLedger();
+        updatePreview();
         await loadRemoteState();
         setOcrStatus("Лог очищен через защищённый серверный маршрут.", "good");
         return true;
@@ -2165,7 +2169,7 @@
           setOcrStatus(`Минуты списаны. ${AUTO_SYNC_MESSAGE}`, "good");
       }));
 
-      clearLogButton.addEventListener("click", function () {
+      clearLogButton.addEventListener("click", async function () {
         if (!hasParentAccess() || !controlCenterOpen) {
           return;
         }
@@ -2184,7 +2188,11 @@
         }
 
         if (currentUser) {
-          void clearLogSecurely();
+          try {
+            await clearLogSecurely();
+          } catch (error) {
+            setOcrStatus(error.message || "Не удалось очистить лог.", "bad");
+          }
           return;
         }
 
